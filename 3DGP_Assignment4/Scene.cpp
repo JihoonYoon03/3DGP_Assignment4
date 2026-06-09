@@ -55,8 +55,7 @@ void GameScene::ConfigureDefaultMenu()
 
 void GameScene::ApplyPlayerLook(int deltaX, int deltaY)
 {
-    player.yaw += static_cast<float>(deltaX) * 0.0045f;
-    player.pitch = std::clamp(player.pitch - static_cast<float>(deltaY) * 0.0035f, -0.55f, 0.45f);
+    player.ApplyLook(deltaX, deltaY);
 }
 
 GameScene::operator SceneName() const
@@ -225,16 +224,6 @@ namespace
         return result;
     }
 
-    XMFLOAT3 AddVector(const XMFLOAT3& a, const XMFLOAT3& b)
-    {
-        return { a.x + b.x, a.y + b.y, a.z + b.z };
-    }
-
-    XMFLOAT3 ScaleVector(const XMFLOAT3& v, float scale)
-    {
-        return { v.x * scale, v.y * scale, v.z * scale };
-    }
-
     float DistanceSquared(const XMFLOAT3& a, const XMFLOAT3& b)
     {
         const float dx = a.x - b.x;
@@ -244,17 +233,6 @@ namespace
     }
 
     // 선형 보간 후 정규화, 완만한 방향 전환에 사용
-    XMFLOAT3 BlendDirection(const XMFLOAT3& from, const XMFLOAT3& to, float amount)
-    {
-        const float t = std::clamp(amount, 0.0f, 1.0f);
-        return Collision::Normalize(
-            {
-                from.x + (to.x - from.x) * t,
-                from.y + (to.y - from.y) * t,
-                from.z + (to.z - from.z) * t
-            });
-    }
-
 }
 
 void GameManager::Update(float deltaSeconds)
@@ -288,199 +266,153 @@ void GameManager::UpdateStart(float deltaSeconds)
 
 void GameManager::UpdateLevel(float deltaSeconds)
 {
-    // 이동은 yaw 방향 기준, pitch는 마우스 조준에만 사용.
-    const XMFLOAT3 forward{ std::sinf(m_scene.player.yaw), 0.0f, std::cosf(m_scene.player.yaw) };
-    const XMFLOAT3 right{ std::cosf(m_scene.player.yaw), 0.0f, -std::sinf(m_scene.player.yaw) };
+    Player& player = m_scene.player;
+    const XMFLOAT3 forward = player.FlatForward();
+    const XMFLOAT3 right = player.FlatRight();
     constexpr float moveSpeed = 18.0f * GP_WORLD_UNITS_PER_METER;
 
-    // 헬리콥터 수평 이동
     if (m_keyDown['W'])
     {
-        m_scene.player.position = AddVector(m_scene.player.position, ScaleVector(forward, moveSpeed * deltaSeconds));
+        player.MoveFlat(forward, moveSpeed * deltaSeconds);
     }
     if (m_keyDown['S'])
     {
-        m_scene.player.position = AddVector(m_scene.player.position, ScaleVector(forward, -moveSpeed * deltaSeconds));
+        player.MoveFlat(forward, -moveSpeed * deltaSeconds);
     }
     if (m_keyDown['A'])
     {
-        m_scene.player.position = AddVector(m_scene.player.position, ScaleVector(right, -moveSpeed * deltaSeconds));
+        player.MoveFlat(right, -moveSpeed * deltaSeconds);
     }
     if (m_keyDown['D'])
     {
-        m_scene.player.position = AddVector(m_scene.player.position, ScaleVector(right, moveSpeed * deltaSeconds));
+        player.MoveFlat(right, moveSpeed * deltaSeconds);
     }
 
-    // Space 상승, Ctrl 하강
     if (m_keyDown[VK_SPACE])
     {
-        m_scene.player.position.y += moveSpeed * 0.55f * deltaSeconds;
+        player.MoveVertical(moveSpeed * 0.55f * deltaSeconds);
     }
     if (m_keyDown[VK_CONTROL] || m_keyDown[VK_LCONTROL])
     {
-        m_scene.player.position.y -= moveSpeed * 0.55f * deltaSeconds;
+        player.MoveVertical(-moveSpeed * 0.55f * deltaSeconds);
     }
 
-    // 지형 바깥으로 너무 멀리 나가지 않도록 위치 제한
     const float movementLimitX = std::max(5.0f, (m_scene.terrain.HalfWidth() > 0.0f ? m_scene.terrain.HalfWidth() : GP_TERRAIN_HALF_SIZE_METERS) - 8.0f);
     const float movementLimitZ = std::max(5.0f, (m_scene.terrain.HalfLength() > 0.0f ? m_scene.terrain.HalfLength() : GP_TERRAIN_HALF_SIZE_METERS) - 8.0f);
-    m_scene.player.position.x = std::clamp(m_scene.player.position.x, -movementLimitX, movementLimitX);
-    m_scene.player.position.z = std::clamp(m_scene.player.position.z, -movementLimitZ, movementLimitZ);
+    player.ClampHorizontal(movementLimitX, movementLimitZ);
 
-    // 하이트 맵에서 현재 x/z 위치의 지형 높이를 구해 헬기가 지면 아래로 내려가지 않게 조정
-    const float terrainHeight = TerrainHeightAt(m_scene.player.position.x, m_scene.player.position.z);
+    const XMFLOAT3 playerPosition = player.Position();
+    const float terrainHeight = TerrainHeightAt(playerPosition.x, playerPosition.z);
     const float minimumAltitude = terrainHeight + GP_PLAYER_TERRAIN_CLEARANCE_METERS * GP_WORLD_UNITS_PER_METER;
     const float maximumAltitude = minimumAltitude + 85.0f * GP_WORLD_UNITS_PER_METER;
-    m_scene.player.position.y = std::clamp(m_scene.player.position.y, minimumAltitude, maximumAltitude);
+    player.ClampAltitude(minimumAltitude, maximumAltitude);
 
-    // 적 객체도 하이트맵 높이에 맞춰 지면 위로 조정
     for (Enemy& target : m_scene.enemies)
     {
-        if (target.active)
+        if (target.IsActive())
         {
-            target.position.y = TerrainHeightAt(target.position.x, target.position.z) + GP_ENEMY_TERRAIN_CLEARANCE_METERS * GP_WORLD_UNITS_PER_METER;
+            const XMFLOAT3 targetPosition = target.Position();
+            target.PlaceOnTerrain(
+                TerrainHeightAt(targetPosition.x, targetPosition.z),
+                GP_ENEMY_TERRAIN_CLEARANCE_METERS * GP_WORLD_UNITS_PER_METER);
         }
     }
 
-    m_scene.player.rotorAngle += 22.0f * deltaSeconds;
+    player.Update(deltaSeconds);
 
-    // 발사는 마우스 클릭에서 처리, 여기선 쿨다운만 줄이기
-    m_scene.player.shotCooldown = std::max(0.0f, m_scene.player.shotCooldown - deltaSeconds);
-
-    // 미사일 이동
     for (Bullet& bullet : m_scene.bullets)
     {
-        const float currentSpeed = std::sqrt(std::max(0.0001f, DistanceSquared(bullet.velocity, { 0.0f, 0.0f, 0.0f })));
-        if (bullet.homing && IsTargetIndexValid(bullet.targetIndex))
+        if (bullet.HasHomingTarget() && IsTargetIndexValid(bullet.TargetIndex()))
         {
-            // 발사 직후에는 헬기 전방으로 사출
-            if (bullet.homingDelaySeconds > 0.0f)
+            if (bullet.CanHome())
             {
-                bullet.homingDelaySeconds = std::max(0.0f, bullet.homingDelaySeconds - deltaSeconds);
+                const Enemy& target = m_scene.enemies[static_cast<std::size_t>(bullet.TargetIndex())];
+                bullet.SteerToward(target.AimPoint(), deltaSeconds, MissileTurnRateRadians);
             }
             else
             {
-                const Enemy& target = m_scene.enemies[static_cast<std::size_t>(bullet.targetIndex)];
-                const XMFLOAT3 targetPoint{ target.position.x, target.position.y + 0.65f, target.position.z };
-                const XMFLOAT3 desiredDirection = Collision::Normalize(
-                    {
-                        targetPoint.x - bullet.position.x,
-                        targetPoint.y - bullet.position.y,
-                        targetPoint.z - bullet.position.z
-                    });
-                const XMFLOAT3 currentDirection = Collision::Normalize(bullet.velocity);
-                const float dot = std::clamp(Collision::Dot(currentDirection, desiredDirection), -1.0f, 1.0f);
-                const float angle = std::acos(dot);
-                const float blend = (angle <= 0.0001f) ? 1.0f : std::min(1.0f, (MissileTurnRateRadians * deltaSeconds) / angle);
-                const XMFLOAT3 newDirection = BlendDirection(currentDirection, desiredDirection, blend);
-                bullet.velocity = ScaleVector(newDirection, currentSpeed);
+                bullet.UpdateHomingDelay(deltaSeconds);
             }
         }
 
-        const XMFLOAT3 previousPosition = bullet.position;
-        bullet.position = AddVector(bullet.position, ScaleVector(bullet.velocity, deltaSeconds));
-        bullet.lifeSeconds -= deltaSeconds;
+        const XMFLOAT3 previousPosition = bullet.Position();
+        bullet.Update(deltaSeconds);
 
-        // 이번 프레임의 이동 구간을 검사해서 지형에 충돌하도록 계산
-        const float travelDistanceSquared = DistanceSquared(previousPosition, bullet.position);
+        const XMFLOAT3 currentPosition = bullet.Position();
+        const float travelDistanceSquared = DistanceSquared(previousPosition, currentPosition);
         if (travelDistanceSquared > 0.000001f)
         {
             const float travelDistance = std::sqrt(travelDistanceSquared);
             const XMFLOAT3 travelDirection = Collision::Normalize(
                 {
-                    bullet.position.x - previousPosition.x,
-                    bullet.position.y - previousPosition.y,
-                    bullet.position.z - previousPosition.z
+                    currentPosition.x - previousPosition.x,
+                    currentPosition.y - previousPosition.y,
+                    currentPosition.z - previousPosition.z
                 });
             Collision::HitResult terrainHit{};
             if (RaycastTerrain({ previousPosition, travelDirection }, travelDistance, terrainHit, MissileTerrainCollisionRadius))
             {
-                bullet.position = terrainHit.position;
-                bullet.lifeSeconds = 0.0f;
+                bullet.SetPosition(terrainHit.position);
+                bullet.Expire();
                 SpawnExplosion(terrainHit.position, { 1.0f, 0.58f, 0.16f, 1.0f }, 5.0f);
             }
         }
 
-        // 미사일 뒤쪽에 회색 큐브로 트레일 이펙트를 남김
-        if (bullet.lifeSeconds > 0.0f)
+        if (!bullet.IsExpired())
         {
-            bullet.trailSpawnAccumulator += deltaSeconds;
-            const XMFLOAT3 missileDirection = Collision::Normalize(bullet.velocity);
-            while (bullet.trailSpawnAccumulator >= MissileTrailSpawnIntervalSeconds)
+            bullet.AccumulateTrail(deltaSeconds);
+            const XMFLOAT3 missileDirection = bullet.Direction();
+            while (bullet.ConsumeTrailSpawn(MissileTrailSpawnIntervalSeconds))
             {
-                bullet.trailSpawnAccumulator -= MissileTrailSpawnIntervalSeconds;
-                const XMFLOAT3 trailPosition
-                {
-                    bullet.position.x - missileDirection.x * 0.55f,
-                    bullet.position.y - missileDirection.y * 0.55f,
-                    bullet.position.z - missileDirection.z * 0.55f
-                };
-                SpawnMissileTrail(trailPosition, missileDirection);
+                SpawnMissileTrail(bullet.TrailPosition(0.55f), missileDirection);
             }
         }
     }
     std::erase_if(m_scene.bullets, [](const Bullet& bullet)
     {
-        return bullet.lifeSeconds <= 0.0f;
+        return bullet.IsExpired();
     });
 
-    // 탄환/표적 충돌 검사
     for (Bullet& bullet : m_scene.bullets)
     {
-        if (bullet.lifeSeconds <= 0.0f)
+        if (bullet.IsExpired())
         {
             continue;
         }
 
         for (Enemy& target : m_scene.enemies)
         {
-            const float hitRadius = bullet.homing ? 4.0f : 1.8f;
-            if (target.active && DistanceSquared(bullet.position, target.position) < hitRadius * hitRadius)
+            if (target.IsActive() && DistanceSquared(bullet.Position(), target.Position()) < bullet.HitRadius() * bullet.HitRadius())
             {
-                target.active = false;
-                bullet.lifeSeconds = 0.0f;
-                SpawnExplosion({ target.position.x, target.position.y + 0.75f, target.position.z }, { 1.0f, 0.42f, 0.10f, 1.0f }, 6.5f);
+                const XMFLOAT3 targetPosition = target.Position();
+                target.Destroy();
+                bullet.Expire();
+                SpawnExplosion({ targetPosition.x, targetPosition.y + 0.75f, targetPosition.z }, { 1.0f, 0.42f, 0.10f, 1.0f }, 6.5f);
                 break;
             }
         }
     }
     std::erase_if(m_scene.bullets, [](const Bullet& bullet)
     {
-        return bullet.lifeSeconds <= 0.0f;
+        return bullet.IsExpired();
     });
 
-    // 폭발 파티클 수명 갱신, 끝났으면 제거
     for (Explosion& explosion : m_scene.explosions)
     {
-        explosion.elapsedSeconds += deltaSeconds;
+        explosion.Update(deltaSeconds);
     }
     std::erase_if(m_scene.explosions, [](const Explosion& explosion)
     {
-        return explosion.elapsedSeconds >= explosion.durationSeconds;
+        return explosion.IsExpired();
     });
 
-    // 미사일 트레일 이펙트는 재사용
     for (MissileTrailParticle& particle : m_scene.missileTrails)
     {
-        if (!particle.active)
-        {
-            continue;
-        }
-
-        particle.elapsedSeconds += deltaSeconds;
-        if (particle.elapsedSeconds >= particle.durationSeconds)
-        {
-            particle.active = false;
-            continue;
-        }
-
-        particle.position = AddVector(particle.position, ScaleVector(particle.velocity, deltaSeconds));
+        particle.Update(deltaSeconds);
     }
 
-    // 총구 광선이 맞는 지형/오브젝트 위치 갱신
     UpdateAimRay();
 }
-
 void GameManager::UpdateAimRay()
 {
     // 헬리콥터 총구에서 광선 발사
@@ -498,12 +430,12 @@ void GameManager::UpdateAimRay()
     for (std::size_t targetIndex = 0; targetIndex < m_scene.enemies.size(); ++targetIndex)
     {
         const Enemy& target = m_scene.enemies[targetIndex];
-        if (!target.active)
+        if (!target.IsActive())
         {
             continue;
         }
 
-        const XMFLOAT3 targetPoint{ target.position.x, target.position.y + 0.65f, target.position.z };
+        const XMFLOAT3 targetPoint = target.AimPoint();
         const XMFLOAT3 toTarget
         {
             targetPoint.x - ray.origin.x,
@@ -565,7 +497,7 @@ void GameManager::UpdateAimRay()
 
 void GameManager::FireBulletAtAim()
 {
-    if (m_scene.player.shotCooldown > 0.0f)
+    if (!m_scene.player.CanFire())
     {
         return;
     }
@@ -573,17 +505,18 @@ void GameManager::FireBulletAtAim()
     UpdateAimRay();
     const XMFLOAT3 muzzle = MuzzlePosition();
     const XMFLOAT3 launchDirection = ForwardDirection();
+    const bool homing = IsTargetIndexValid(m_scene.lockedTargetIndex);
+    const int targetIndex = homing ? m_scene.lockedTargetIndex : -1;
 
-    Bullet bullet{};
-    bullet.position = muzzle;
-    bullet.velocity = Collision::Scale(launchDirection, 55.0f * GP_WORLD_UNITS_PER_METER);
-    bullet.lifeSeconds = 10.0f;
-    bullet.homing = IsTargetIndexValid(m_scene.lockedTargetIndex);
-    bullet.targetIndex = bullet.homing ? m_scene.lockedTargetIndex : -1;
-    bullet.homingDelaySeconds = bullet.homing ? MissileHomingDelaySeconds : 0.0f;
-    bullet.trailSpawnAccumulator = MissileTrailSpawnIntervalSeconds;
-    m_scene.bullets.push_back(bullet);
-    m_scene.player.shotCooldown = 0.18f;
+    m_scene.bullets.emplace_back(
+        muzzle,
+        Collision::Scale(launchDirection, 55.0f * GP_WORLD_UNITS_PER_METER),
+        10.0f,
+        homing,
+        targetIndex,
+        homing ? MissileHomingDelaySeconds : 0.0f,
+        MissileTrailSpawnIntervalSeconds);
+    m_scene.player.StartShotCooldown(0.18f);
 }
 
 void GameManager::SpawnMissileTrail(const XMFLOAT3& position, const XMFLOAT3& missileDirection)
@@ -591,28 +524,12 @@ void GameManager::SpawnMissileTrail(const XMFLOAT3& position, const XMFLOAT3& mi
     MissileTrailParticle& particle = m_scene.missileTrails[m_scene.nextMissileTrailIndex];
     m_scene.nextMissileTrailIndex = (m_scene.nextMissileTrailIndex + 1) % m_scene.missileTrails.size();
 
-    particle.position = position;
-    particle.velocity =
-    {
-        -missileDirection.x * 3.0f,
-        -missileDirection.y * 3.0f + 0.25f,
-        -missileDirection.z * 3.0f
-    };
-    particle.elapsedSeconds = 0.0f;
-    particle.durationSeconds = MissileTrailDurationSeconds;
-    particle.startSize = MissileTrailStartSize;
-    particle.active = true;
+    particle.Initialize(position, missileDirection, MissileTrailDurationSeconds, MissileTrailStartSize);
 }
 
 void GameManager::SpawnExplosion(const XMFLOAT3& position, const XMFLOAT4& color, float radius)
 {
-    Explosion explosion{};
-    explosion.position = position;
-    explosion.color = color;
-    explosion.elapsedSeconds = 0.0f;
-    explosion.durationSeconds = ExplosionDurationSeconds;
-    explosion.radius = radius;
-    m_scene.explosions.push_back(explosion);
+    m_scene.explosions.emplace_back(position, color, ExplosionDurationSeconds, radius);
 }
 
 void GameManager::BuildDrawItems()
@@ -700,14 +617,14 @@ void GameManager::AddHelicopter()
             {
                 partAnimation =
                     XMMatrixTranslation(-part.center.x, -part.center.y, -part.center.z) *
-                    XMMatrixRotationY(m_scene.player.rotorAngle * 1.8f) *
+                    XMMatrixRotationY(m_scene.player.RotorAngle() * 1.8f) *
                     XMMatrixTranslation(part.center.x, part.center.y, part.center.z);
             }
             else if (part.tailRotor)
             {
                 partAnimation =
                     XMMatrixTranslation(-part.center.x, -part.center.y, -part.center.z) *
-                    XMMatrixRotationX(m_scene.player.rotorAngle * 3.2f) *
+                    XMMatrixRotationX(m_scene.player.RotorAngle() * 3.2f) *
                     XMMatrixTranslation(part.center.x, part.center.y, part.center.z);
             }
 
@@ -721,7 +638,10 @@ void GameManager::AddHelicopter()
         return;
     }
 
-    const XMMATRIX parent = XMMatrixRotationRollPitchYaw(-m_scene.player.pitch * 0.45f, m_scene.player.yaw, 0.0f) * XMMatrixTranslation(m_scene.player.position.x, m_scene.player.position.y, m_scene.player.position.z);
+    const XMFLOAT3 playerPosition = m_scene.player.Position();
+    const XMMATRIX parent =
+        XMMatrixRotationRollPitchYaw(-m_scene.player.Pitch() * 0.45f, m_scene.player.Yaw(), 0.0f) *
+        XMMatrixTranslation(playerPosition.x, playerPosition.y, playerPosition.z);
 
     auto addPart = [this, parent](const XMFLOAT3& localPosition, const XMFLOAT3& size, const XMFLOAT4& color, const XMMATRIX& localRotation = XMMatrixIdentity())
     {
@@ -735,10 +655,10 @@ void GameManager::AddHelicopter()
     addPart({ 0.0f, 0.03f, -1.55f }, { 0.24f, 0.24f, 1.75f }, { 0.10f, 0.22f, 0.58f, 1.0f });
     addPart({ 0.0f, 0.02f, -2.55f }, { 0.48f, 0.48f, 0.12f }, { 0.16f, 0.28f, 0.70f, 1.0f });
 
-    addPart({ 0.0f, 0.48f, 0.0f }, { 3.25f, 0.05f, 0.14f }, { 0.95f, 0.95f, 0.98f, 1.0f }, XMMatrixRotationY(m_scene.player.rotorAngle));
-    addPart({ 0.0f, 0.49f, 0.0f }, { 0.14f, 0.05f, 3.25f }, { 0.95f, 0.95f, 0.98f, 1.0f }, XMMatrixRotationY(m_scene.player.rotorAngle));
-    addPart({ 0.34f, 0.02f, -2.72f }, { 0.08f, 0.85f, 0.10f }, { 0.95f, 0.92f, 0.75f, 1.0f }, XMMatrixRotationX(m_scene.player.rotorAngle * 1.7f));
-    addPart({ 0.34f, 0.02f, -2.72f }, { 0.08f, 0.10f, 0.85f }, { 0.95f, 0.92f, 0.75f, 1.0f }, XMMatrixRotationX(m_scene.player.rotorAngle * 1.7f));
+    addPart({ 0.0f, 0.48f, 0.0f }, { 3.25f, 0.05f, 0.14f }, { 0.95f, 0.95f, 0.98f, 1.0f }, XMMatrixRotationY(m_scene.player.RotorAngle()));
+    addPart({ 0.0f, 0.49f, 0.0f }, { 0.14f, 0.05f, 3.25f }, { 0.95f, 0.95f, 0.98f, 1.0f }, XMMatrixRotationY(m_scene.player.RotorAngle()));
+    addPart({ 0.34f, 0.02f, -2.72f }, { 0.08f, 0.85f, 0.10f }, { 0.95f, 0.92f, 0.75f, 1.0f }, XMMatrixRotationX(m_scene.player.RotorAngle() * 1.7f));
+    addPart({ 0.34f, 0.02f, -2.72f }, { 0.08f, 0.10f, 0.85f }, { 0.95f, 0.92f, 0.75f, 1.0f }, XMMatrixRotationX(m_scene.player.RotorAngle() * 1.7f));
     addPart({ 0.0f, -0.02f, 1.35f }, { 0.18f, 0.18f, 0.50f }, { 0.08f, 0.08f, 0.10f, 1.0f });
 
     addPart({ -0.48f, -0.48f, 0.1f }, { 0.10f, 0.08f, 1.65f }, { 0.08f, 0.10f, 0.18f, 1.0f });
@@ -751,22 +671,23 @@ void GameManager::AddHelicopter()
 
 XMMATRIX GameManager::PlayerModelWorldMatrix() const
 {
+    const XMFLOAT3 playerPosition = m_scene.player.Position();
     return
         XMMatrixScaling(GP_APACHE_MODEL_SCALE, GP_APACHE_MODEL_SCALE, GP_APACHE_MODEL_SCALE) *
-        XMMatrixRotationRollPitchYaw(-m_scene.player.pitch * 0.45f, m_scene.player.yaw, 0.0f) *
-        XMMatrixTranslation(m_scene.player.position.x, m_scene.player.position.y, m_scene.player.position.z);
+        XMMatrixRotationRollPitchYaw(-m_scene.player.Pitch() * 0.45f, m_scene.player.Yaw(), 0.0f) *
+        XMMatrixTranslation(playerPosition.x, playerPosition.y, playerPosition.z);
 }
 
 void GameManager::AddTargets()
 {
     for (const Enemy& target : m_scene.enemies)
     {
-        if (!target.active)
+        if (!target.IsActive())
         {
             continue;
         }
 
-        AddBox(target.position, { 1.0f, 1.6f, 1.0f }, { 0.86f, 0.18f, 0.16f, 1.0f }, m_totalTime * 0.5f);
+        AddBox(target.Position(), { 1.0f, 1.6f, 1.0f }, { 0.86f, 0.18f, 0.16f, 1.0f }, m_totalTime * 0.5f);
     }
 }
 
@@ -774,20 +695,20 @@ void GameManager::AddMissileTrails()
 {
     for (const MissileTrailParticle& particle : m_scene.missileTrails)
     {
-        if (!particle.active)
+        if (!particle.IsActive())
         {
             continue;
         }
 
-        const float t = std::clamp(particle.elapsedSeconds / std::max(0.0001f, particle.durationSeconds), 0.0f, 1.0f);
-        const float size = particle.startSize * (1.0f - t);
+        const float t = std::clamp(particle.ElapsedSeconds() / std::max(0.0001f, particle.DurationSeconds()), 0.0f, 1.0f);
+        const float size = particle.StartSize() * (1.0f - t);
         if (size <= 0.03f)
         {
             continue;
         }
 
         const float gray = 0.38f + 0.18f * (1.0f - t);
-        AddBox(particle.position, { size, size, size }, { gray, gray, gray, 1.0f }, t * 2.0f, t * 1.3f, t * 1.7f);
+        AddBox(particle.Position(), { size, size, size }, { gray, gray, gray, 1.0f }, t * 2.0f, t * 1.3f, t * 1.7f);
     }
 }
 
@@ -795,12 +716,13 @@ void GameManager::AddBullets()
 {
     for (const Bullet& bullet : m_scene.bullets)
     {
-        const XMFLOAT3 direction = Collision::Normalize(bullet.velocity);
+        const XMFLOAT3 direction = bullet.Direction();
         const float yaw = std::atan2(direction.x, direction.z);
         const float pitch = std::asin(std::clamp(direction.y, -1.0f, 1.0f));
-        const float visualScale = ScreenConstantScaleAt(bullet.position, 0.012f);
-        const XMFLOAT4 color = bullet.homing ? XMFLOAT4{ 1.0f, 0.38f, 0.12f, 1.0f } : XMFLOAT4{ 1.0f, 0.95f, 0.35f, 1.0f };
-        AddBox(bullet.position, { visualScale * 0.45f, visualScale * 0.45f, visualScale * 1.20f }, color, yaw, -pitch, 0.0f);
+        const XMFLOAT3 position = bullet.Position();
+        const float visualScale = ScreenConstantScaleAt(position, 0.012f);
+        const XMFLOAT4 color = bullet.IsHoming() ? XMFLOAT4{ 1.0f, 0.38f, 0.12f, 1.0f } : XMFLOAT4{ 1.0f, 0.95f, 0.35f, 1.0f };
+        AddBox(position, { visualScale * 0.45f, visualScale * 0.45f, visualScale * 1.20f }, color, yaw, -pitch, 0.0f);
     }
 }
 
@@ -808,27 +730,29 @@ void GameManager::AddExplosions()
 {
     for (const Explosion& explosion : m_scene.explosions)
     {
-        const float t = std::clamp(explosion.elapsedSeconds / std::max(0.0001f, explosion.durationSeconds), 0.0f, 1.0f);
+        const float t = std::clamp(explosion.ElapsedSeconds() / std::max(0.0001f, explosion.DurationSeconds()), 0.0f, 1.0f);
         const float burst = 1.0f - (1.0f - t) * (1.0f - t);
         const float fadeScale = std::max(0.0f, 1.0f - t);
+        const XMFLOAT3 explosionPosition = explosion.Position();
+        const XMFLOAT4 explosionColor = explosion.Color();
 
         for (int particleIndex = 0; particleIndex < ExplosionParticleCount; ++particleIndex)
         {
             const float seed = static_cast<float>(particleIndex);
             const XMFLOAT3 direction = BurstDirection(std::cos(seed * 0.73f), std::sin(seed * 1.11f), particleIndex + 17);
-            const float distanceScale = explosion.radius * (0.35f + static_cast<float>(particleIndex % 7) * 0.08f) * burst;
+            const float distanceScale = explosion.Radius() * (0.35f + static_cast<float>(particleIndex % 7) * 0.08f) * burst;
             const XMFLOAT3 position
             {
-                explosion.position.x + direction.x * distanceScale,
-                explosion.position.y + direction.y * distanceScale,
-                explosion.position.z + direction.z * distanceScale
+                explosionPosition.x + direction.x * distanceScale,
+                explosionPosition.y + direction.y * distanceScale,
+                explosionPosition.z + direction.z * distanceScale
             };
-            const float particleSize = std::max(0.14f, explosion.radius * 0.075f * fadeScale);
+            const float particleSize = std::max(0.14f, explosion.Radius() * 0.075f * fadeScale);
             const XMFLOAT4 color
             {
-                std::min(1.0f, explosion.color.x + static_cast<float>(particleIndex % 3) * 0.08f),
-                std::max(0.18f, explosion.color.y * (0.72f + fadeScale * 0.28f)),
-                std::max(0.04f, explosion.color.z * fadeScale),
+                std::min(1.0f, explosionColor.x + static_cast<float>(particleIndex % 3) * 0.08f),
+                std::max(0.18f, explosionColor.y * (0.72f + fadeScale * 0.28f)),
+                std::max(0.04f, explosionColor.z * fadeScale),
                 1.0f
             };
             AddBox(position, { particleSize, particleSize, particleSize }, color, seed * 0.37f + t * 5.0f, seed * 0.19f + t * 4.0f, seed * 0.23f);
@@ -859,7 +783,7 @@ void GameManager::AddLockOnIndicator()
     }
 
     const Enemy& target = m_scene.enemies[static_cast<std::size_t>(m_scene.lockedTargetIndex)];
-    const XMFLOAT3 center{ target.position.x, target.position.y + 1.15f, target.position.z };
+    const XMFLOAT3 center = target.AimPoint(1.15f);
     const float size = ScreenConstantScaleAt(center, 0.050f);
     const float thickness = std::max(0.12f, size * 0.075f);
     const float half = size * 0.65f;
@@ -1056,11 +980,7 @@ void GameManager::ResetLevel()
 
     const float usableHalfX = std::max(80.0f * GP_WORLD_UNITS_PER_METER, (m_scene.terrain.HalfWidth() > 0.0f ? m_scene.terrain.HalfWidth() : GP_TERRAIN_HALF_SIZE_METERS) - 24.0f * GP_WORLD_UNITS_PER_METER);
     const float usableHalfZ = std::max(120.0f * GP_WORLD_UNITS_PER_METER, (m_scene.terrain.HalfLength() > 0.0f ? m_scene.terrain.HalfLength() : GP_TERRAIN_HALF_SIZE_METERS) - 24.0f * GP_WORLD_UNITS_PER_METER);
-    m_scene.player.position = placeOnTerrain(0.0f, -usableHalfZ * 0.45f, GP_PLAYER_TERRAIN_CLEARANCE_METERS);
-    m_scene.player.yaw = 0.0f;
-    m_scene.player.pitch = 0.0f;
-    m_scene.player.rotorAngle = 0.0f;
-    m_scene.player.shotCooldown = 0.0f;
+    m_scene.player.Reset(placeOnTerrain(0.0f, -usableHalfZ * 0.45f, GP_PLAYER_TERRAIN_CLEARANCE_METERS));
     m_scene.crosshairValid = false;
     m_scene.lockedTargetIndex = -1;
     m_scene.lockPinned = false;
@@ -1069,7 +989,7 @@ void GameManager::ResetLevel()
     m_scene.explosions.clear();
     for (MissileTrailParticle& particle : m_scene.missileTrails)
     {
-        particle.active = false;
+        particle.Deactivate();
     }
     m_scene.nextMissileTrailIndex = 0;
     m_scene.enemies.clear();
@@ -1081,7 +1001,7 @@ void GameManager::ResetLevel()
         const float spread = 0.28f + normalizedIndex * 0.60f;
         const float x = std::sin(angle) * usableHalfX * 0.72f * spread;
         const float z = usableHalfZ * (-0.04f + normalizedIndex * 0.78f) + std::cos(angle) * usableHalfZ * 0.07f;
-        m_scene.enemies.push_back({ placeOnTerrain(x, z, GP_ENEMY_TERRAIN_CLEARANCE_METERS), true });
+        m_scene.enemies.emplace_back(placeOnTerrain(x, z, GP_ENEMY_TERRAIN_CLEARANCE_METERS));
     }
     UpdateAimRay();
 }
@@ -1093,7 +1013,7 @@ bool GameManager::IsTargetIndexValid(int targetIndex) const
         return false;
     }
 
-    return m_scene.enemies[static_cast<std::size_t>(targetIndex)].active;
+    return m_scene.enemies[static_cast<std::size_t>(targetIndex)].IsActive();
 }
 
 float GameManager::ScreenConstantScaleAt(const XMFLOAT3& position, float scalePerMeter) const
@@ -1218,23 +1138,23 @@ bool GameManager::RaycastTerrain(const Collision::Ray& ray, float maxDistance, C
 
 XMFLOAT3 GameManager::LevelCameraPosition() const
 {
-    return m_camera.LevelCameraPosition(m_scene.player.position, m_scene.player.yaw);
+    return m_camera.LevelCameraPosition(m_scene.player.Position(), m_scene.player.Yaw());
 }
 
 XMFLOAT3 GameManager::ForwardDirection() const
 {
-    const float cosPitch = std::cos(m_scene.player.pitch);
-    return Collision::Normalize({ std::sin(m_scene.player.yaw) * cosPitch, std::sin(m_scene.player.pitch), std::cos(m_scene.player.yaw) * cosPitch });
+    return m_scene.player.ForwardDirection();
 }
 
 XMFLOAT3 GameManager::MuzzlePosition() const
 {
     const XMFLOAT3 forward = ForwardDirection();
+    const XMFLOAT3 playerPosition = m_scene.player.Position();
     const float muzzleOffset = m_assets.modelLoaded ? GP_APACHE_MUZZLE_OFFSET_METERS * GP_WORLD_UNITS_PER_METER : 1.55f;
     return
     {
-        m_scene.player.position.x + forward.x * muzzleOffset,
-        m_scene.player.position.y + 0.02f + forward.y * 0.25f,
-        m_scene.player.position.z + forward.z * muzzleOffset
+        playerPosition.x + forward.x * muzzleOffset,
+        playerPosition.y + 0.02f + forward.y * 0.25f,
+        playerPosition.z + forward.z * muzzleOffset
     };
 }

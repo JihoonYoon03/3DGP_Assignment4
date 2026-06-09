@@ -235,5 +235,5 @@ DirectX::XMMATRIX GameManager::ProjectionMatrix() const
 
 DirectX::XMMATRIX GameManager::LevelViewMatrix() const
 {
-    return m_camera.LevelViewMatrix(m_scene.player.position, m_scene.player.yaw, ForwardDirection());
+    return m_camera.LevelViewMatrix(m_scene.player.Position(), m_scene.player.Yaw(), ForwardDirection());
 }
