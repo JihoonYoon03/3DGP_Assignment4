@@ -22,6 +22,7 @@ public:
 
     void OnMouseMove(int x, int y);
     void OnMouseDown(int x, int y);
+    void OnMouseUp(int x, int y);
     void OnRightMouseDown(int x, int y);
 
 private:
@@ -33,16 +34,27 @@ private:
     void Update(float deltaSeconds);
     void UpdateStart(float deltaSeconds);
     void UpdateLevel(float deltaSeconds);
+    void UpdateLevel2(float deltaSeconds);
+    void UpdateLevel3(float deltaSeconds);
     void UpdateAimRay();
+    void UpdateTankAimRay();
 
     void FireBulletAtAim();
+    void FireTankShellAt(int targetIndex);
 
     void BuildDrawItems();
     void BuildStartScene();
     void BuildMenuScene();
+    void BuildTutorialScene();
     void BuildLevelScene();
+    void BuildLevel2Scene();
+    void BuildLevel3Scene();
 
     void AddHelicopter();
+    void AddModel(ModelType type, const DirectX::XMMATRIX& world, const DirectX::XMFLOAT4& color);
+    void AddTank(const Tank& tank, const DirectX::XMFLOAT4& color);
+    void AddObstacles();
+    void AddLevelExitMarker();
     void AddTargets();
     void AddMissileTrails();
     void AddBullets();
@@ -61,20 +73,31 @@ private:
     int HitMenuEntry(int x, int y) const;
 
     void ResetLevel();
+    void ResetLevel2();
+    void ResetLevel3();
     void SetLevelCursorCapture(bool enabled);
 
     bool IsTargetIndexValid(int targetIndex) const;
+    bool IsTankIndexValid(int targetIndex) const;
+    int PickTankAtScreen(int x, int y) const;
+    int NearestActiveTankIndex(const DirectX::XMFLOAT3& origin) const;
+    bool AllEnemyTanksDestroyed() const;
+    bool ReachedLevelExit() const;
 
     float ScreenConstantScaleAt(const DirectX::XMFLOAT3& position, float scalePerMeter) const;
     float TerrainHeightAt(float worldX, float worldZ) const;
     bool RaycastTerrain(const Collision::Ray& ray, float maxDistance, Collision::HitResult& hit, float heightOffset = 0.0f) const;
+    Collision::Ray ScreenRay(int x, int y, const DirectX::XMMATRIX& view) const;
 
     DirectX::XMFLOAT3 LevelCameraPosition() const;
     DirectX::XMFLOAT3 ForwardDirection() const;
     DirectX::XMFLOAT3 MuzzlePosition() const;
+    DirectX::XMFLOAT3 TankCameraPosition() const;
 
     DirectX::XMMATRIX ProjectionMatrix() const;
     DirectX::XMMATRIX LevelViewMatrix() const;
+    DirectX::XMMATRIX Level2ViewMatrix() const;
+    DirectX::XMMATRIX Level3ViewMatrix() const;
 
     Camera m_camera{};
     GameAssets m_assets{};
@@ -87,6 +110,7 @@ private:
     int m_lastMouseY = 0;
     bool m_hasLastMousePosition = false;
     bool m_cursorCaptured = false;
+    bool m_leftMouseDragging = false;
 
     float m_totalTime = 0.0f;
 };

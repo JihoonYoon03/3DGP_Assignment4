@@ -81,6 +81,7 @@ public:
         bool tailRotor = false;
     };
 
+    static std::optional<std::filesystem::path> FindPath(const std::wstring& fileName);
     static std::optional<std::filesystem::path> FindDefaultPath();
 
     bool LoadFromTextFile(const std::filesystem::path& filePath);

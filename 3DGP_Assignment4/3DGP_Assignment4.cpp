@@ -183,6 +183,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         break;
     case WM_LBUTTONUP:
+        if (g_game)
+        {
+            g_game->OnMouseUp(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+        }
         ReleaseCapture();
         break;
     case WM_RBUTTONDOWN:

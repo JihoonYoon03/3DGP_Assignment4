@@ -254,7 +254,7 @@ TerrainMeshData MeshFactory::CreateTerrainFromDefaultHeightMap()
 
 namespace
 {
-    constexpr const wchar_t* TextMeshModelFileName = L"Apache.txt";
+    constexpr const wchar_t* DefaultTextMeshModelFileName = L"Apache.txt";
 
     XMFLOAT4X4 IdentityMatrix()
     {
@@ -359,22 +359,22 @@ namespace
         return std::filesystem::path(modulePath.data()).parent_path();
     }
 
-    std::optional<std::filesystem::path> FindTextMeshModelPath()
+    std::optional<std::filesystem::path> FindTextMeshModelPath(const std::wstring& fileName)
     {
         std::vector<std::filesystem::path> candidates =
         {
-            std::filesystem::path(L"Models") / TextMeshModelFileName,
-            std::filesystem::path(L"3DGP_Assignment4") / L"Models" / TextMeshModelFileName,
-            std::filesystem::path(L"..") / L"Models" / TextMeshModelFileName,
-            std::filesystem::path(L"..") / L".." / L"3DGP_Assignment4" / L"Models" / TextMeshModelFileName
+            std::filesystem::path(L"Models") / fileName,
+            std::filesystem::path(L"3DGP_Assignment4") / L"Models" / fileName,
+            std::filesystem::path(L"..") / L"Models" / fileName,
+            std::filesystem::path(L"..") / L".." / L"3DGP_Assignment4" / L"Models" / fileName
         };
 
         const std::filesystem::path exeDirectory = TextMeshModelExecutableDirectory();
         if (!exeDirectory.empty())
         {
-            candidates.push_back(exeDirectory / L"Models" / TextMeshModelFileName);
-            candidates.push_back(exeDirectory / L".." / L"Models" / TextMeshModelFileName);
-            candidates.push_back(exeDirectory / L".." / L".." / L"3DGP_Assignment4" / L"Models" / TextMeshModelFileName);
+            candidates.push_back(exeDirectory / L"Models" / fileName);
+            candidates.push_back(exeDirectory / L".." / L"Models" / fileName);
+            candidates.push_back(exeDirectory / L".." / L".." / L"3DGP_Assignment4" / L"Models" / fileName);
         }
 
         for (const std::filesystem::path& candidate : candidates)
@@ -434,9 +434,14 @@ namespace
 }
 
 
+std::optional<std::filesystem::path> TextMeshModel::FindPath(const std::wstring& fileName)
+{
+    return FindTextMeshModelPath(fileName);
+}
+
 std::optional<std::filesystem::path> TextMeshModel::FindDefaultPath()
 {
-    return FindTextMeshModelPath();
+    return FindTextMeshModelPath(DefaultTextMeshModelFileName);
 }
 
 const std::vector<TextMeshModel::Part>& TextMeshModel::Parts() const

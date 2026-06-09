@@ -7,7 +7,10 @@ enum class SceneName
 {
     Start,
     Menu,
-    Level1
+    Tutorial,
+    Level1,
+    Level2,
+    Level3
 };
 
 class GameScene
@@ -34,6 +37,9 @@ public:
     Player player{};
     std::vector<Bullet> bullets;
     std::vector<Enemy> enemies;
+    Tank playerTank{};
+    std::vector<Tank> enemyTanks;
+    std::vector<Obstacle> obstacles;
     std::vector<Explosion> explosions;
     std::array<MissileTrailParticle, MaxMissileTrailParticles> missileTrails{};
     std::size_t nextMissileTrailIndex = 0;
@@ -48,6 +54,13 @@ public:
     bool titleExploding = false;
     float titleExplosionTime = 0.0f;
     float titleExplosionYaw = 0.0f;
+
+    DirectX::XMFLOAT3 levelExitPosition{ 0.0f, 0.0f, 0.0f };
+    float levelExitRadius = 12.0f;
+
+    int selectedTankIndex = -1;
+    bool level2Win = false;
+    bool firstPersonHelicopter = false;
 
 private:
     SceneName m_name = SceneName::Start;

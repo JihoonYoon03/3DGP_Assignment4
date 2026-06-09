@@ -392,6 +392,142 @@ void Enemy::Destroy()
     Deactivate();
 }
 
+Tank::Tank() = default;
+
+Tank::Tank(const DirectX::XMFLOAT3& position, float yaw, int health)
+{
+    Reset(position, yaw, health);
+}
+
+void Tank::Reset(const DirectX::XMFLOAT3& position, float yaw, int health)
+{
+    SetPosition(position);
+    SetRotation(0.0f, yaw, 0.0f);
+    m_health = std::max(1, health);
+    m_reloadSeconds = 0.0f;
+    m_shieldEnabled = false;
+    m_autoAttackEnabled = false;
+    Activate();
+}
+
+void Tank::Update(float deltaSeconds)
+{
+    m_reloadSeconds = std::max(0.0f, m_reloadSeconds - deltaSeconds);
+}
+
+void Tank::MoveForward(float distance)
+{
+    Move(ScaleVector(ForwardDirection(), distance));
+}
+
+void Tank::RotateYaw(float amount)
+{
+    SetYaw(Yaw() + amount);
+}
+
+DirectX::XMFLOAT3 Tank::ForwardDirection() const
+{
+    return { std::sin(Yaw()), 0.0f, std::cos(Yaw()) };
+}
+
+DirectX::XMFLOAT3 Tank::FirePoint(float forwardOffset, float heightOffset) const
+{
+    const DirectX::XMFLOAT3 forward = ForwardDirection();
+    return
+    {
+        Position().x + forward.x * forwardOffset,
+        Position().y + heightOffset,
+        Position().z + forward.z * forwardOffset
+    };
+}
+
+bool Tank::CanFire() const
+{
+    return IsActive() && m_reloadSeconds <= 0.0f;
+}
+
+void Tank::StartReload(float seconds)
+{
+    m_reloadSeconds = std::max(0.0f, seconds);
+}
+
+bool Tank::Damage(int amount)
+{
+    if (!IsActive() || m_shieldEnabled)
+    {
+        return false;
+    }
+
+    m_health -= std::max(0, amount);
+    if (m_health <= 0)
+    {
+        Deactivate();
+        return true;
+    }
+    return false;
+}
+
+bool Tank::Destroyed() const
+{
+    return !IsActive();
+}
+
+void Tank::SetShieldEnabled(bool enabled)
+{
+    m_shieldEnabled = enabled;
+}
+
+void Tank::ToggleShield()
+{
+    m_shieldEnabled = !m_shieldEnabled;
+}
+
+bool Tank::ShieldEnabled() const
+{
+    return m_shieldEnabled;
+}
+
+void Tank::SetAutoAttackEnabled(bool enabled)
+{
+    m_autoAttackEnabled = enabled;
+}
+
+void Tank::ToggleAutoAttack()
+{
+    m_autoAttackEnabled = !m_autoAttackEnabled;
+}
+
+bool Tank::AutoAttackEnabled() const
+{
+    return m_autoAttackEnabled;
+}
+
+Obstacle::Obstacle() = default;
+
+Obstacle::Obstacle(const DirectX::XMFLOAT3& position, float yaw, float radius, int variant)
+{
+    Reset(position, yaw, radius, variant);
+}
+
+void Obstacle::Reset(const DirectX::XMFLOAT3& position, float yaw, float radius, int variant)
+{
+    SetPosition(position);
+    SetRotation(0.0f, yaw, 0.0f);
+    m_radius = std::max(0.1f, radius);
+    m_variant = variant;
+    Activate();
+}
+
+float Obstacle::Radius() const
+{
+    return m_radius;
+}
+
+int Obstacle::Variant() const
+{
+    return m_variant;
+}
+
 Explosion::Explosion()
 {
     Deactivate();

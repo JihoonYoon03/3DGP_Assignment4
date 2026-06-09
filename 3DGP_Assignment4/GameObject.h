@@ -126,6 +126,55 @@ public:
     void Destroy();
 };
 
+class Tank : public GameObject
+{
+public:
+    Tank();
+    Tank(const DirectX::XMFLOAT3& position, float yaw, int health = 1);
+
+    void Reset(const DirectX::XMFLOAT3& position, float yaw, int health = 1);
+    void Update(float deltaSeconds) override;
+    void MoveForward(float distance);
+    void RotateYaw(float amount);
+
+    DirectX::XMFLOAT3 ForwardDirection() const;
+    DirectX::XMFLOAT3 FirePoint(float forwardOffset, float heightOffset) const;
+
+    bool CanFire() const;
+    void StartReload(float seconds);
+    bool Damage(int amount);
+    bool Destroyed() const;
+
+    void SetShieldEnabled(bool enabled);
+    void ToggleShield();
+    bool ShieldEnabled() const;
+
+    void SetAutoAttackEnabled(bool enabled);
+    void ToggleAutoAttack();
+    bool AutoAttackEnabled() const;
+
+private:
+    int m_health = 1;
+    float m_reloadSeconds = 0.0f;
+    bool m_shieldEnabled = false;
+    bool m_autoAttackEnabled = false;
+};
+
+class Obstacle : public GameObject
+{
+public:
+    Obstacle();
+    Obstacle(const DirectX::XMFLOAT3& position, float yaw, float radius, int variant);
+
+    void Reset(const DirectX::XMFLOAT3& position, float yaw, float radius, int variant);
+    float Radius() const;
+    int Variant() const;
+
+private:
+    float m_radius = 1.0f;
+    int m_variant = 0;
+};
+
 class Explosion : public GameObject
 {
 public:

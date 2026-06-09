@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 inline constexpr float GP_WORLD_UNITS_PER_METER = 1.0f;
 
@@ -15,6 +15,16 @@ inline constexpr float GP_TERRAIN_HALF_SIZE_METERS = GP_TERRAIN_CELL_METERS * st
 inline constexpr float GP_APACHE_SOURCE_UNIT_TO_METER = 0.09f;
 inline constexpr float GP_APACHE_MODEL_SCALE = GP_APACHE_SOURCE_UNIT_TO_METER * GP_WORLD_UNITS_PER_METER;
 inline constexpr float GP_APACHE_MUZZLE_OFFSET_METERS = 5.2f;
+inline constexpr float GP_TANK_MODEL_SCALE = 3.6f * GP_WORLD_UNITS_PER_METER;
+inline constexpr float GP_ROCK_MODEL_SCALE = 5.0f * GP_WORLD_UNITS_PER_METER;
+inline constexpr float GP_TANK_TERRAIN_CLEARANCE_METERS = 1.0f;
+inline constexpr float GP_OBSTACLE_TERRAIN_CLEARANCE_METERS = 0.0f;
+inline constexpr int GP_LEVEL2_ENEMY_TANK_COUNT = 12;
+inline constexpr int GP_LEVEL2_OBSTACLE_COUNT = 56;
+inline constexpr int GP_LEVEL3_ENEMY_TANK_COUNT = 10;
+inline constexpr float GP_TANK_MOVE_SPEED = 22.0f * GP_WORLD_UNITS_PER_METER;
+inline constexpr float GP_TANK_SHELL_SPEED = 48.0f * GP_WORLD_UNITS_PER_METER;
+inline constexpr float GP_TANK_FIRE_RELOAD_SECONDS = 0.55f;
 
 inline constexpr float GP_UNREAL_CENTIMETER_TO_METER = 0.01f;
 inline constexpr float GP_HEIGHTMAP_UNREAL_X_SCALE = 1578.38f;
