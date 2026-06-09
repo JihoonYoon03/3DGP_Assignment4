@@ -1,8 +1,6 @@
 #pragma once
 
-#include <DirectXMath.h>
-
-class GameCamera
+class Camera
 {
 public:
     DirectX::XMMATRIX ProjectionMatrix(unsigned int width, unsigned int height) const;

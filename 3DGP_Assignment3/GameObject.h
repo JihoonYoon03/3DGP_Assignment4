@@ -2,10 +2,7 @@
 
 #include "Mesh.h"
 
-#include <DirectXMath.h>
 
-#include <cstddef>
-#include <string>
 
 class DrawItem
 {

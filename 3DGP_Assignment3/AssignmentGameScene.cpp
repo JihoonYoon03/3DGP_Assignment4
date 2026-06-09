@@ -1,14 +1,8 @@
-﻿#include "AssignmentGame.h"
+#include "pch.h"
+#include "AssignmentGame.h"
 
 #include "Collision.h"
 
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cwctype>
-#include <limits>
-#include <string_view>
-#include <unordered_map>
 
 using namespace DirectX;
 

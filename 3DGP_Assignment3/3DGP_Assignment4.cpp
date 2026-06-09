@@ -1,15 +1,12 @@
-﻿// 3DGP_Assignment4.cpp : 애플리케이션에 대한 진입점을 정의합니다.
+// 3DGP_Assignment4.cpp : 애플리케이션에 대한 진입점을 정의합니다.
 //
 
+#include "pch.h"
 #include "framework.h"
 #include "3DGP_Assignment4.h"
 #include "AssignmentGame.h"
 
-#include <windowsx.h>
 
-#include <chrono>
-#include <memory>
-#include <stdexcept>
 
 #define MAX_LOADSTRING 100
 

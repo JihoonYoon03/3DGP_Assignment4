@@ -1,15 +1,6 @@
-﻿#include "AssignmentGame.h"
+#include "pch.h"
+#include "AssignmentGame.h"
 
-#include <algorithm>
-#include <array>
-#include <cstring>
-#include <filesystem>
-#include <fstream>
-#include <limits>
-#include <optional>
-#include <sstream>
-#include <string>
-#include <string_view>
 
 using namespace DirectX;
 
@@ -195,45 +186,6 @@ namespace
     };
 }
 
-
-void AssignmentGame::CreateMesh(MeshResource& mesh, const std::vector<Vertex>& vertices, const std::vector<std::uint32_t>& indices, D3D12_PRIMITIVE_TOPOLOGY topology)
-{
-    // 비어 있는 메시가 들어오면 렌더 단계에서 건너뛸 수 있도록 리소스를 초기화
-    if (vertices.empty() || indices.empty())
-    {
-        mesh = {};
-        return;
-    }
-
-    const UINT vertexBufferSize = static_cast<UINT>(vertices.size() * sizeof(Vertex));
-    const UINT indexBufferSize = static_cast<UINT>(indices.size() * sizeof(std::uint32_t));
-
-    const D3D12_HEAP_PROPERTIES uploadHeap = HeapProperties(D3D12_HEAP_TYPE_UPLOAD);
-    const D3D12_RESOURCE_DESC vertexDesc = BufferResourceDesc(vertexBufferSize);
-    const D3D12_RESOURCE_DESC indexDesc = BufferResourceDesc(indexBufferSize);
-
-    ThrowIfFailed(m_device->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE, &vertexDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&mesh.vertexBuffer)));
-    ThrowIfFailed(m_device->CreateCommittedResource(&uploadHeap, D3D12_HEAP_FLAG_NONE, &indexDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&mesh.indexBuffer)));
-
-    void* mappedVertices = nullptr;
-    ThrowIfFailed(mesh.vertexBuffer->Map(0, nullptr, &mappedVertices));
-    std::memcpy(mappedVertices, vertices.data(), vertexBufferSize);
-    mesh.vertexBuffer->Unmap(0, nullptr);
-
-    void* mappedIndices = nullptr;
-    ThrowIfFailed(mesh.indexBuffer->Map(0, nullptr, &mappedIndices));
-    std::memcpy(mappedIndices, indices.data(), indexBufferSize);
-    mesh.indexBuffer->Unmap(0, nullptr);
-
-    mesh.vertexBufferView.BufferLocation = mesh.vertexBuffer->GetGPUVirtualAddress();
-    mesh.vertexBufferView.StrideInBytes = sizeof(Vertex);
-    mesh.vertexBufferView.SizeInBytes = vertexBufferSize;
-    mesh.indexBufferView.BufferLocation = mesh.indexBuffer->GetGPUVirtualAddress();
-    mesh.indexBufferView.Format = DXGI_FORMAT_R32_UINT;
-    mesh.indexBufferView.SizeInBytes = indexBufferSize;
-    mesh.indexCount = static_cast<UINT>(indices.size());
-    mesh.topology = topology;
-}
 
 bool AssignmentGame::CreateApacheMesh()
 {
@@ -521,7 +473,7 @@ bool AssignmentGame::LoadApacheModelFile(const std::wstring& filePath)
         part.mainRotor = (part.name.find("rotor") != std::string::npos);
         part.tailRotor = !part.mainRotor && part.center.z < -35.0f && fullSize.z > 8.0f && fullSize.x < 4.0f && fullSize.y < 4.0f;
 
-        CreateMesh(part.mesh, vertices, cpuPart.indices, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        CreateMeshResource(part.mesh, vertices, cpuPart.indices, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         if (part.mesh.indexCount > 0)
         {
             m_apacheParts.push_back(std::move(part));

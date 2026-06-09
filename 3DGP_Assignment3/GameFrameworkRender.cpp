@@ -1,12 +1,7 @@
-﻿#include "AssignmentGame.h"
+#include "pch.h"
+#include "GameFramework.h"
 
-#include <d3dcompiler.h>
-
-#include <algorithm>
-#include <array>
-#include <filesystem>
-#include <optional>
-#include <vector>
+#include "GameConfig.h"
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -58,8 +53,7 @@ namespace
     }
 }
 
-
-void AssignmentGame::CreatePipelineState()
+void GameFramework::CreatePipelineState()
 {
     D3D12_ROOT_PARAMETER rootParameter{};
     rootParameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
@@ -96,7 +90,6 @@ void AssignmentGame::CreatePipelineState()
     ThrowIfFailed(D3DCompileFromFile(shaderPath->c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "VSMain", "vs_5_1", compileFlags, 0, &vertexShader, &errorBlob));
     ThrowIfFailed(D3DCompileFromFile(shaderPath->c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PSMain", "ps_5_1", compileFlags, 0, &pixelShader, &errorBlob));
 
-    // 입력 레이아웃
     D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
     {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -154,19 +147,20 @@ void AssignmentGame::CreatePipelineState()
     ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
 }
 
-void AssignmentGame::Render()
+void GameFramework::RenderFrame(
+    std::vector<DrawItem>& drawItems,
+    const std::array<MeshResource, static_cast<std::size_t>(MeshType::Count)>& meshes,
+    const std::vector<ApacheMeshPart>& apacheParts,
+    const XMMATRIX& viewProjection,
+    const XMFLOAT3& cameraPosition,
+    const XMFLOAT4& clearColor)
 {
-    BuildDrawItems();
+    if (drawItems.size() > MaxDrawItems)
+    {
+        drawItems.resize(MaxDrawItems);
+    }
 
-    // 씬에 맞는 카메라를 선택
-    const XMMATRIX view =
-        (m_scene == SceneMode::Level1)
-        ? LevelViewMatrix()
-        : XMMatrixLookAtLH(XMVectorSet(0.0f, 0.0f, -8.5f, 1.0f), XMVectorZero(), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
-    const XMMATRIX viewProjection = view * ProjectionMatrix();
-
-    // 명령 목록을 기록 후 GPU에 제출
-    PopulateCommandList(viewProjection);
+    PopulateCommandList(drawItems, meshes, apacheParts, viewProjection, cameraPosition, clearColor);
     ID3D12CommandList* commandLists[] = { m_commandList.Get() };
     m_commandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
 
@@ -175,19 +169,22 @@ void AssignmentGame::Render()
     m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 }
 
-void AssignmentGame::PopulateCommandList(const XMMATRIX& viewProjection)
+void GameFramework::PopulateCommandList(
+    const std::vector<DrawItem>& drawItems,
+    const std::array<MeshResource, static_cast<std::size_t>(MeshType::Count)>& meshes,
+    const std::vector<ApacheMeshPart>& apacheParts,
+    const XMMATRIX& viewProjection,
+    const XMFLOAT3& cameraPosition,
+    const XMFLOAT4& clearColor)
 {
-    // 이전 프레임 끝난 뒤 같은 할당자를 재사용
     ThrowIfFailed(m_commandAllocator->Reset());
     ThrowIfFailed(m_commandList->Reset(m_commandAllocator.Get(), m_pipelineState.Get()));
 
-    UploadObjectConstants(viewProjection);
+    UploadObjectConstants(drawItems, viewProjection, cameraPosition);
 
-    // 현재 백 버퍼를 렌더 타깃 상태로 전환
     const D3D12_RESOURCE_BARRIER toRenderTarget = TransitionBarrier(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
     m_commandList->ResourceBarrier(1, &toRenderTarget);
 
-    // 렌더링 상태와 출력 버퍼 설정
     m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
     m_commandList->RSSetViewports(1, &m_viewport);
     m_commandList->RSSetScissorRects(1, &m_scissorRect);
@@ -197,29 +194,26 @@ void AssignmentGame::PopulateCommandList(const XMMATRIX& viewProjection)
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = m_dsvHeap->GetCPUDescriptorHandleForHeapStart();
     m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
 
-    // 씬 별 배경색은 구분 목적으로 다르게 설정
-    const float clearColorStart[4] = { 0.03f, 0.05f, 0.09f, 1.0f };
-    const float clearColorLevel[4] = { 0.38f, 0.55f, 0.78f, 1.0f };
-    m_commandList->ClearRenderTargetView(rtvHandle, (m_scene == SceneMode::Level1) ? clearColorLevel : clearColorStart, 0, nullptr);
+    const float clearColorValues[4] = { clearColor.x, clearColor.y, clearColor.z, clearColor.w };
+    m_commandList->ClearRenderTargetView(rtvHandle, clearColorValues, 0, nullptr);
     m_commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
     const UINT constantBufferStride = AlignConstantBufferSize(sizeof(ObjectConstants));
-    for (std::size_t itemIndex = 0; itemIndex < m_drawItems.size(); ++itemIndex)
+    for (std::size_t itemIndex = 0; itemIndex < drawItems.size(); ++itemIndex)
     {
-        const DrawItem& item = m_drawItems[itemIndex];
-        const MeshResource* mesh = &m_meshes[static_cast<std::size_t>(item.mesh)];
+        const DrawItem& item = drawItems[itemIndex];
+        const MeshResource* mesh = &meshes[static_cast<std::size_t>(item.mesh)];
         if (item.mesh == MeshType::Apache)
         {
-            if (item.meshPartIndex >= m_apacheParts.size())
+            if (item.meshPartIndex >= apacheParts.size())
             {
                 continue;
             }
-            mesh = &m_apacheParts[item.meshPartIndex].mesh;
+            mesh = &apacheParts[item.meshPartIndex].mesh;
         }
 
         if (mesh->indexCount == 0 || !mesh->vertexBuffer || !mesh->indexBuffer)
         {
-            // 모델 파일을 찾지 못 한 경우 스킵
             continue;
         }
 
@@ -230,32 +224,25 @@ void AssignmentGame::PopulateCommandList(const XMMATRIX& viewProjection)
         m_commandList->DrawIndexedInstanced(mesh->indexCount, 1, 0, 0, 0);
     }
 
-    // 백 버퍼를 다시 Present 상태로 전환해 화면 표시 준비
     const D3D12_RESOURCE_BARRIER toPresent = TransitionBarrier(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     m_commandList->ResourceBarrier(1, &toPresent);
     ThrowIfFailed(m_commandList->Close());
 }
 
-void AssignmentGame::UploadObjectConstants(const XMMATRIX& viewProjection)
+void GameFramework::UploadObjectConstants(
+    const std::vector<DrawItem>& drawItems,
+    const XMMATRIX& viewProjection,
+    const XMFLOAT3& cameraPosition)
 {
-    if (m_drawItems.size() > MaxDrawItems)
-    {
-        m_drawItems.resize(MaxDrawItems);
-    }
-
     const UINT constantBufferStride = AlignConstantBufferSize(sizeof(ObjectConstants));
-    const XMFLOAT3 cameraPosition =
-        (m_scene == SceneMode::Level1)
-        ? LevelCameraPosition()
-        : XMFLOAT3{ 0.0f, 0.0f, -8.5f };
 
     const XMVECTOR lightDirectionVector = XMVector3Normalize(XMVectorSet(-0.45f, -0.85f, 0.25f, 0.0f));
     XMFLOAT3 lightDirection{};
     XMStoreFloat3(&lightDirection, lightDirectionVector);
 
-    for (std::size_t itemIndex = 0; itemIndex < m_drawItems.size(); ++itemIndex)
+    for (std::size_t itemIndex = 0; itemIndex < drawItems.size(); ++itemIndex)
     {
-        const DrawItem& item = m_drawItems[itemIndex];
+        const DrawItem& item = drawItems[itemIndex];
         const XMMATRIX world = XMLoadFloat4x4(&item.world);
         const XMMATRIX worldInverseTranspose = XMMatrixInverse(nullptr, world);
         const XMMATRIX worldViewProjection = XMMatrixTranspose(world * viewProjection);

@@ -1,14 +1,8 @@
 #pragma once
 
-#include <d3d12.h>
 
-#include <DirectXMath.h>
 
-#include <wrl/client.h>
 
-#include <cstddef>
-#include <cstdint>
-#include <string>
 
 enum class MeshType : std::size_t
 {

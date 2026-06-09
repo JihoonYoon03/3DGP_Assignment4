@@ -1,9 +1,10 @@
-﻿#include "AssignmentGame.h"
+#include "pch.h"
+#include "GameFramework.h"
 
 using Microsoft::WRL::ComPtr;
 
 
-void AssignmentGame::CreateDeviceResources()
+void GameFramework::CreateDeviceResources()
 {
     UINT factoryFlags = 0;
 
@@ -101,7 +102,7 @@ void AssignmentGame::CreateDeviceResources()
     }
 }
 
-void AssignmentGame::CreateWindowSizeDependentResources()
+void GameFramework::CreateWindowSizeDependentResources()
 {
     for (auto& renderTarget : m_renderTargets)
     {

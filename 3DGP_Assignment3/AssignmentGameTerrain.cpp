@@ -1,12 +1,6 @@
-﻿#include "AssignmentGame.h"
+#include "pch.h"
+#include "AssignmentGame.h"
 
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <filesystem>
-#include <optional>
-#include <vector>
-#include <wincodec.h>
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
@@ -203,7 +197,7 @@ void AssignmentGame::CreateMeshResources()
         20, 21, 22, 20, 22, 23
     };
 
-    CreateMesh(m_meshes[static_cast<std::size_t>(MeshType::Cube)], cubeVertices, cubeIndices, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    CreateMeshResource(m_meshes[static_cast<std::size_t>(MeshType::Cube)], cubeVertices, cubeIndices, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     // 하이트맵 이미지의 픽셀 수를 지형 정점 수로 그대로 사용
     const std::optional<HeightMapData> heightMap = LoadHeightMap();
@@ -252,7 +246,7 @@ void AssignmentGame::CreateMeshResources()
         }
     }
 
-    CreateMesh(m_meshes[static_cast<std::size_t>(MeshType::Terrain)], terrainVertices, terrainIndices, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    CreateMeshResource(m_meshes[static_cast<std::size_t>(MeshType::Terrain)], terrainVertices, terrainIndices, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     m_apacheModelLoaded = CreateApacheMesh();
 }
