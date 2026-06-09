@@ -17,7 +17,7 @@ protected:
     void RenderFrame(
         std::vector<DrawItem>& drawItems,
         const std::array<MeshResource, static_cast<std::size_t>(MeshType::Count)>& meshes,
-        const std::vector<ApacheMeshPart>& apacheParts,
+        const std::vector<ModelMeshPart>& modelParts,
         const DirectX::XMMATRIX& viewProjection,
         const DirectX::XMFLOAT3& cameraPosition,
         const DirectX::XMFLOAT4& clearColor);

@@ -4,15 +4,14 @@
 #include "Collision.h"
 #include "GameConfig.h"
 #include "GameFramework.h"
-#include "GameObject.h"
-#include "Mesh.h"
-#include "Terrain.h"
+#include "Assets.h"
+#include "Scene.h"
 
-class AssignmentGame : public GameFramework
+class GameManager : public GameFramework
 {
 public:
-    AssignmentGame() = default;
-    ~AssignmentGame() override;
+    GameManager() = default;
+    ~GameManager() override;
 
     void Initialize(HWND hwnd, UINT width, UINT height);
     void Tick(float deltaSeconds);
@@ -26,19 +25,10 @@ public:
     void OnRightMouseDown(int x, int y);
 
 private:
-    static constexpr std::size_t MaxMissileTrailParticles = 384;
-
-    enum class SceneMode
-    {
-        Start,
-        Menu,
-        Level1
-    };
-
     void Render();
 
     void CreateMeshResources();
-    DirectX::XMMATRIX ApacheModelWorldMatrix() const;
+    DirectX::XMMATRIX PlayerModelWorldMatrix() const;
 
     void Update(float deltaSeconds);
     void UpdateStart(float deltaSeconds);
@@ -87,14 +77,8 @@ private:
     DirectX::XMMATRIX LevelViewMatrix() const;
 
     Camera m_camera{};
-
-    std::array<MeshResource, static_cast<std::size_t>(MeshType::Count)> m_meshes{};
-    std::vector<ApacheMeshPart> m_apacheParts;
-    bool m_apacheModelLoaded = false;
-
-    std::vector<DrawItem> m_drawItems;
-
-    Terrain m_terrain;
+    GameAssets m_assets{};
+    GameScene m_scene{};
 
     std::array<bool, 256> m_keyDown{};
     int m_mouseX = 0;
@@ -104,28 +88,5 @@ private:
     bool m_hasLastMousePosition = false;
     bool m_cursorCaptured = false;
 
-    SceneMode m_scene = SceneMode::Start;
     float m_totalTime = 0.0f;
-    bool m_nameExploding = false;
-    float m_nameExplosionTime = 0.0f;
-    float m_nameExplosionYaw = 0.0f;
-
-    std::vector<MenuEntry> m_menuEntries;
-
-    DirectX::XMFLOAT3 m_helicopterPosition{ 0.0f, 1.3f, -8.0f };
-    float m_helicopterYaw = 0.0f;
-    float m_helicopterPitch = 0.0f;
-    float m_rotorAngle = 0.0f;
-    float m_shotCooldown = 0.0f;
-    std::vector<Bullet> m_bullets;
-    std::vector<Target> m_targets;
-    std::vector<Explosion> m_explosions;
-    std::array<MissileTrailParticle, MaxMissileTrailParticles> m_missileTrails{};
-    std::size_t m_nextMissileTrailIndex = 0;
-    int m_lockedTargetIndex = -1;
-    bool m_lockPinned = false;
-
-    bool m_crosshairValid = false;
-    DirectX::XMFLOAT3 m_crosshairPosition{ 0.0f, 0.0f, 0.0f };
-    DirectX::XMFLOAT3 m_aimDirection{ 0.0f, 0.0f, 1.0f };
 };

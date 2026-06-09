@@ -4,7 +4,7 @@
 #include "pch.h"
 #include "framework.h"
 #include "3DGP_Assignment4.h"
-#include "AssignmentGame.h"
+#include "GameManager.h"
 
 
 
@@ -14,7 +14,7 @@ HINSTANCE hInst;                                // 현재 인스턴스입니다.
 WCHAR szTitle[MAX_LOADSTRING];                  // 제목 표시줄 텍스트입니다.
 WCHAR szWindowClass[MAX_LOADSTRING];            // 기본 창 클래스 이름입니다.
 HWND g_hWnd = nullptr;
-std::unique_ptr<AssignmentGame> g_game;
+std::unique_ptr<GameManager> g_game;
 
 ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
@@ -42,7 +42,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     {
         RECT clientRect{};
         GetClientRect(g_hWnd, &clientRect);
-        g_game = std::make_unique<AssignmentGame>();
+        g_game = std::make_unique<GameManager>();
         g_game->Initialize(g_hWnd, static_cast<UINT>(clientRect.right - clientRect.left), static_cast<UINT>(clientRect.bottom - clientRect.top));
     }
     catch (const std::exception& e)

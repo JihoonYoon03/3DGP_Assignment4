@@ -25,12 +25,12 @@ void GameFramework::OnResize(UINT width, UINT height)
 void GameFramework::RenderFrame(
     std::vector<DrawItem>& drawItems,
     const std::array<MeshResource, static_cast<std::size_t>(MeshType::Count)>& meshes,
-    const std::vector<ApacheMeshPart>& apacheParts,
+    const std::vector<ModelMeshPart>& modelParts,
     const DirectX::XMMATRIX& viewProjection,
     const DirectX::XMFLOAT3& cameraPosition,
     const DirectX::XMFLOAT4& clearColor)
 {
-    m_renderer.RenderFrame(drawItems, meshes, apacheParts, viewProjection, cameraPosition, clearColor);
+    m_renderer.RenderFrame(drawItems, meshes, modelParts, viewProjection, cameraPosition, clearColor);
 }
 
 void GameFramework::CreateMeshResource(MeshResource& mesh, const MeshData& meshData)

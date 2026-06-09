@@ -254,7 +254,7 @@ TerrainMeshData MeshFactory::CreateTerrainFromDefaultHeightMap()
 
 namespace
 {
-    constexpr const wchar_t* ApacheModelFileName = L"Apache.txt";
+    constexpr const wchar_t* TextMeshModelFileName = L"Apache.txt";
 
     XMFLOAT4X4 IdentityMatrix()
     {
@@ -348,7 +348,7 @@ namespace
         return normalized;
     }
 
-    std::filesystem::path ApacheModelExecutableDirectory()
+    std::filesystem::path TextMeshModelExecutableDirectory()
     {
         std::array<wchar_t, MAX_PATH> modulePath{};
         const DWORD length = GetModuleFileNameW(nullptr, modulePath.data(), static_cast<DWORD>(modulePath.size()));
@@ -359,22 +359,22 @@ namespace
         return std::filesystem::path(modulePath.data()).parent_path();
     }
 
-    std::optional<std::filesystem::path> FindApacheModelPath()
+    std::optional<std::filesystem::path> FindTextMeshModelPath()
     {
         std::vector<std::filesystem::path> candidates =
         {
-            std::filesystem::path(L"Models") / ApacheModelFileName,
-            std::filesystem::path(L"3DGP_Assignment4") / L"Models" / ApacheModelFileName,
-            std::filesystem::path(L"..") / L"Models" / ApacheModelFileName,
-            std::filesystem::path(L"..") / L".." / L"3DGP_Assignment4" / L"Models" / ApacheModelFileName
+            std::filesystem::path(L"Models") / TextMeshModelFileName,
+            std::filesystem::path(L"3DGP_Assignment4") / L"Models" / TextMeshModelFileName,
+            std::filesystem::path(L"..") / L"Models" / TextMeshModelFileName,
+            std::filesystem::path(L"..") / L".." / L"3DGP_Assignment4" / L"Models" / TextMeshModelFileName
         };
 
-        const std::filesystem::path exeDirectory = ApacheModelExecutableDirectory();
+        const std::filesystem::path exeDirectory = TextMeshModelExecutableDirectory();
         if (!exeDirectory.empty())
         {
-            candidates.push_back(exeDirectory / L"Models" / ApacheModelFileName);
-            candidates.push_back(exeDirectory / L".." / L"Models" / ApacheModelFileName);
-            candidates.push_back(exeDirectory / L".." / L".." / L"3DGP_Assignment4" / L"Models" / ApacheModelFileName);
+            candidates.push_back(exeDirectory / L"Models" / TextMeshModelFileName);
+            candidates.push_back(exeDirectory / L".." / L"Models" / TextMeshModelFileName);
+            candidates.push_back(exeDirectory / L".." / L".." / L"3DGP_Assignment4" / L"Models" / TextMeshModelFileName);
         }
 
         for (const std::filesystem::path& candidate : candidates)
@@ -388,7 +388,7 @@ namespace
         return std::nullopt;
     }
 
-    struct ApacheFrameState
+    struct TextMeshFrameState
     {
         int indent = 0;
         XMFLOAT4X4 parentWorld = IdentityMatrix();
@@ -396,8 +396,8 @@ namespace
         std::string name;
     };
 
-    // GPU 리소스를 만들기 전 CPU에서 보관하는 Apache 파트 데이터
-    struct ApacheCpuPart
+    // GPU 리소스를 만들기 전 CPU에서 보관하는 텍스트 모델 파트 데이터
+    struct TextMeshCpuPart
     {
         std::string name;
         std::vector<XMFLOAT3> positions;
@@ -408,7 +408,7 @@ namespace
     };
 
     // 메시 데이터 임시 보관용
-    struct PendingApacheMesh
+    struct PendingTextMesh
     {
         bool active = false;
         std::string name;
@@ -434,17 +434,17 @@ namespace
 }
 
 
-std::optional<std::filesystem::path> ApacheModel::FindDefaultPath()
+std::optional<std::filesystem::path> TextMeshModel::FindDefaultPath()
 {
-    return FindApacheModelPath();
+    return FindTextMeshModelPath();
 }
 
-const std::vector<ApacheModelPart>& ApacheModel::Parts() const
+const std::vector<TextMeshModel::Part>& TextMeshModel::Parts() const
 {
     return m_parts;
 }
 
-bool ApacheModel::Load(const std::filesystem::path& filePath)
+bool TextMeshModel::LoadFromTextFile(const std::filesystem::path& filePath)
 {
     std::ifstream file{ filePath };
     if (!file)
@@ -452,12 +452,12 @@ bool ApacheModel::Load(const std::filesystem::path& filePath)
         return false;
     }
 
-    std::vector<ApacheCpuPart> cpuParts;
+    std::vector<TextMeshCpuPart> cpuParts;
     cpuParts.reserve(40);
 
     const XMFLOAT4X4 identity = IdentityMatrix();
-    std::vector<ApacheFrameState> frameStack;
-    PendingApacheMesh pendingMesh;
+    std::vector<TextMeshFrameState> frameStack;
+    PendingTextMesh pendingMesh;
 
     auto flushPendingMesh = [&]()
     {
@@ -473,7 +473,7 @@ bool ApacheModel::Load(const std::filesystem::path& filePath)
                 pendingMesh.normals.assign(pendingMesh.positions.size(), { 0.0f, 1.0f, 0.0f });
             }
 
-            ApacheCpuPart part{};
+            TextMeshCpuPart part{};
             part.name = pendingMesh.name;
             part.positions = std::move(pendingMesh.positions);
             part.normals = std::move(pendingMesh.normals);
@@ -502,7 +502,7 @@ bool ApacheModel::Load(const std::filesystem::path& filePath)
                 frameStack.pop_back();
             }
 
-            ApacheFrameState frame{};
+            TextMeshFrameState frame{};
             frame.indent = indent;
             frame.parentWorld = frameStack.empty() ? identity : frameStack.back().world;
             frame.world = frame.parentWorld;
@@ -540,7 +540,7 @@ bool ApacheModel::Load(const std::filesystem::path& filePath)
             flushPendingMesh();
 
             pendingMesh.active = true;
-            pendingMesh.name = frameStack.empty() ? "ApachePart" : frameStack.back().name;
+            pendingMesh.name = frameStack.empty() ? "ModelPart" : frameStack.back().name;
             pendingMesh.world = frameStack.empty() ? identity : frameStack.back().world;
             std::istringstream stream{ std::string(*payload) };
             int vertexCount = 0;
@@ -650,10 +650,10 @@ bool ApacheModel::Load(const std::filesystem::path& filePath)
         return false;
     }
 
-    // Apache 모델의 중심 구하기 / 각 파트 정점을 같은 모델 로컬 좌표계로
+    // 텍스트 모델의 중심 구하기 / 각 파트 정점을 같은 모델 로컬 좌표계로
     XMFLOAT3 modelMin{ std::numeric_limits<float>::max(), std::numeric_limits<float>::max(), std::numeric_limits<float>::max() };
     XMFLOAT3 modelMax{ std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest(), std::numeric_limits<float>::lowest() };
-    for (const ApacheCpuPart& part : cpuParts)
+    for (const TextMeshCpuPart& part : cpuParts)
     {
         for (const XMFLOAT3& position : part.positions)
         {
@@ -675,7 +675,7 @@ bool ApacheModel::Load(const std::filesystem::path& filePath)
 
     m_parts.clear();
     m_parts.reserve(cpuParts.size());
-    for (ApacheCpuPart& cpuPart : cpuParts)
+    for (TextMeshCpuPart& cpuPart : cpuParts)
     {
         std::vector<Vertex> vertices;
         vertices.reserve(cpuPart.positions.size());
@@ -699,7 +699,7 @@ bool ApacheModel::Load(const std::filesystem::path& filePath)
             vertices.push_back({ position, cpuPart.color, cpuPart.normals[index] });
         }
 
-        ApacheModelPart part{};
+        TextMeshModel::Part part{};
         part.name = std::move(cpuPart.name);
         part.center =
         {

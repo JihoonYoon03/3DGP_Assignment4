@@ -1,29 +1,34 @@
 #include "pch.h"
-#include "AssignmentGame.h"
+#include "GameManager.h"
 
-void AssignmentGame::CreateMeshResources()
+void GameAssets::ResetModel()
+{
+    modelParts.clear();
+    modelLoaded = false;
+}
+
+void GameManager::CreateMeshResources()
 {
     const MeshData cubeMesh = MeshFactory::CreateCube();
-    CreateMeshResource(m_meshes[static_cast<std::size_t>(MeshType::Cube)], cubeMesh);
+    CreateMeshResource(m_assets.meshes[static_cast<std::size_t>(MeshType::Cube)], cubeMesh);
 
     TerrainMeshData terrainBuild = MeshFactory::CreateTerrainFromDefaultHeightMap();
-    m_terrain = std::move(terrainBuild.terrain);
-    CreateMeshResource(m_meshes[static_cast<std::size_t>(MeshType::Terrain)], terrainBuild.mesh);
+    m_scene.terrain = std::move(terrainBuild.terrain);
+    CreateMeshResource(m_assets.meshes[static_cast<std::size_t>(MeshType::Terrain)], terrainBuild.mesh);
 
-    m_apacheParts.clear();
-    m_apacheModelLoaded = false;
+    m_assets.ResetModel();
 
-    ApacheModel apacheModel;
-    const std::optional<std::filesystem::path> modelPath = ApacheModel::FindDefaultPath();
-    if (!modelPath || !apacheModel.Load(*modelPath))
+    TextMeshModel textModel;
+    const std::optional<std::filesystem::path> modelPath = TextMeshModel::FindDefaultPath();
+    if (!modelPath || !textModel.LoadFromTextFile(*modelPath))
     {
         return;
     }
 
-    m_apacheParts.reserve(apacheModel.Parts().size());
-    for (const ApacheModelPart& modelPart : apacheModel.Parts())
+    m_assets.modelParts.reserve(textModel.Parts().size());
+    for (const TextMeshModel::Part& modelPart : textModel.Parts())
     {
-        ApacheMeshPart part{};
+        ModelMeshPart part{};
         part.center = modelPart.center;
         part.extents = modelPart.extents;
         part.name = modelPart.name;
@@ -33,9 +38,9 @@ void AssignmentGame::CreateMeshResources()
         CreateMeshResource(part.mesh, modelPart.meshData);
         if (part.mesh.indexCount > 0)
         {
-            m_apacheParts.push_back(std::move(part));
+            m_assets.modelParts.push_back(std::move(part));
         }
     }
 
-    m_apacheModelLoaded = !m_apacheParts.empty();
+    m_assets.modelLoaded = !m_assets.modelParts.empty();
 }

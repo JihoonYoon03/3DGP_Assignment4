@@ -1,7 +1,74 @@
 #include "pch.h"
-#include "AssignmentGame.h"
+#include "GameManager.h"
 
 #include "Collision.h"
+
+GameScene::GameScene()
+{
+    ConfigureDefaultMenu();
+}
+
+SceneName GameScene::Name() const
+{
+    return m_name;
+}
+
+const std::wstring& GameScene::DisplayName() const
+{
+    return m_displayName;
+}
+
+void GameScene::SetName(SceneName name)
+{
+    m_name = name;
+    switch (m_name)
+    {
+    case SceneName::Start:
+        m_displayName = L"Start";
+        break;
+    case SceneName::Menu:
+        m_displayName = L"Menu";
+        break;
+    case SceneName::Level1:
+        m_displayName = L"Level 1";
+        break;
+    }
+}
+
+bool GameScene::Is(SceneName name) const
+{
+    return m_name == name;
+}
+
+void GameScene::ConfigureDefaultMenu()
+{
+    menuEntries =
+    {
+        { L"TUTORIAL", 1.65f },
+        { L"LEVEL-1", 0.90f },
+        { L"LEVEL-2", 0.15f },
+        { L"LEVEL-3", -0.60f },
+        { L"START", -1.35f },
+        { L"END", -2.10f }
+    };
+}
+
+void GameScene::ApplyPlayerLook(int deltaX, int deltaY)
+{
+    player.yaw += static_cast<float>(deltaX) * 0.0045f;
+    player.pitch = std::clamp(player.pitch - static_cast<float>(deltaY) * 0.0035f, -0.55f, 0.45f);
+}
+
+GameScene::operator SceneName() const
+{
+    return m_name;
+}
+
+GameScene& GameScene::operator=(SceneName name)
+{
+    SetName(name);
+    return *this;
+}
 
 
 using namespace DirectX;
@@ -190,84 +257,84 @@ namespace
 
 }
 
-void AssignmentGame::Update(float deltaSeconds)
+void GameManager::Update(float deltaSeconds)
 {
-    switch (m_scene)
+    switch (m_scene.Name())
     {
-    case SceneMode::Start:
+    case SceneName::Start:
         UpdateStart(deltaSeconds);
         break;
-    case SceneMode::Menu:
+    case SceneName::Menu:
         break;
-    case SceneMode::Level1:
+    case SceneName::Level1:
         UpdateLevel(deltaSeconds);
         break;
     }
 }
 
-void AssignmentGame::UpdateStart(float deltaSeconds)
+void GameManager::UpdateStart(float deltaSeconds)
 {
-    if (m_nameExploding)
+    if (m_scene.titleExploding)
     {
-        m_nameExplosionTime += deltaSeconds;
-        if (m_nameExplosionTime > 1.25f)
+        m_scene.titleExplosionTime += deltaSeconds;
+        if (m_scene.titleExplosionTime > 1.25f)
         {
-            m_scene = SceneMode::Menu;
-            m_nameExploding = false;
-            m_nameExplosionTime = 0.0f;
+            m_scene = SceneName::Menu;
+            m_scene.titleExploding = false;
+            m_scene.titleExplosionTime = 0.0f;
         }
     }
 }
 
-void AssignmentGame::UpdateLevel(float deltaSeconds)
+void GameManager::UpdateLevel(float deltaSeconds)
 {
     // 이동은 yaw 방향 기준, pitch는 마우스 조준에만 사용.
-    const XMFLOAT3 forward{ std::sinf(m_helicopterYaw), 0.0f, std::cosf(m_helicopterYaw) };
-    const XMFLOAT3 right{ std::cosf(m_helicopterYaw), 0.0f, -std::sinf(m_helicopterYaw) };
+    const XMFLOAT3 forward{ std::sinf(m_scene.player.yaw), 0.0f, std::cosf(m_scene.player.yaw) };
+    const XMFLOAT3 right{ std::cosf(m_scene.player.yaw), 0.0f, -std::sinf(m_scene.player.yaw) };
     constexpr float moveSpeed = 18.0f * GP_WORLD_UNITS_PER_METER;
 
     // 헬리콥터 수평 이동
     if (m_keyDown['W'])
     {
-        m_helicopterPosition = AddVector(m_helicopterPosition, ScaleVector(forward, moveSpeed * deltaSeconds));
+        m_scene.player.position = AddVector(m_scene.player.position, ScaleVector(forward, moveSpeed * deltaSeconds));
     }
     if (m_keyDown['S'])
     {
-        m_helicopterPosition = AddVector(m_helicopterPosition, ScaleVector(forward, -moveSpeed * deltaSeconds));
+        m_scene.player.position = AddVector(m_scene.player.position, ScaleVector(forward, -moveSpeed * deltaSeconds));
     }
     if (m_keyDown['A'])
     {
-        m_helicopterPosition = AddVector(m_helicopterPosition, ScaleVector(right, -moveSpeed * deltaSeconds));
+        m_scene.player.position = AddVector(m_scene.player.position, ScaleVector(right, -moveSpeed * deltaSeconds));
     }
     if (m_keyDown['D'])
     {
-        m_helicopterPosition = AddVector(m_helicopterPosition, ScaleVector(right, moveSpeed * deltaSeconds));
+        m_scene.player.position = AddVector(m_scene.player.position, ScaleVector(right, moveSpeed * deltaSeconds));
     }
 
     // Space 상승, Ctrl 하강
     if (m_keyDown[VK_SPACE])
     {
-        m_helicopterPosition.y += moveSpeed * 0.55f * deltaSeconds;
+        m_scene.player.position.y += moveSpeed * 0.55f * deltaSeconds;
     }
     if (m_keyDown[VK_CONTROL] || m_keyDown[VK_LCONTROL])
     {
-        m_helicopterPosition.y -= moveSpeed * 0.55f * deltaSeconds;
+        m_scene.player.position.y -= moveSpeed * 0.55f * deltaSeconds;
     }
 
     // 지형 바깥으로 너무 멀리 나가지 않도록 위치 제한
-    const float movementLimitX = std::max(5.0f, (m_terrain.HalfWidth() > 0.0f ? m_terrain.HalfWidth() : GP_TERRAIN_HALF_SIZE_METERS) - 8.0f);
-    const float movementLimitZ = std::max(5.0f, (m_terrain.HalfLength() > 0.0f ? m_terrain.HalfLength() : GP_TERRAIN_HALF_SIZE_METERS) - 8.0f);
-    m_helicopterPosition.x = std::clamp(m_helicopterPosition.x, -movementLimitX, movementLimitX);
-    m_helicopterPosition.z = std::clamp(m_helicopterPosition.z, -movementLimitZ, movementLimitZ);
+    const float movementLimitX = std::max(5.0f, (m_scene.terrain.HalfWidth() > 0.0f ? m_scene.terrain.HalfWidth() : GP_TERRAIN_HALF_SIZE_METERS) - 8.0f);
+    const float movementLimitZ = std::max(5.0f, (m_scene.terrain.HalfLength() > 0.0f ? m_scene.terrain.HalfLength() : GP_TERRAIN_HALF_SIZE_METERS) - 8.0f);
+    m_scene.player.position.x = std::clamp(m_scene.player.position.x, -movementLimitX, movementLimitX);
+    m_scene.player.position.z = std::clamp(m_scene.player.position.z, -movementLimitZ, movementLimitZ);
 
     // 하이트 맵에서 현재 x/z 위치의 지형 높이를 구해 헬기가 지면 아래로 내려가지 않게 조정
-    const float terrainHeight = TerrainHeightAt(m_helicopterPosition.x, m_helicopterPosition.z);
+    const float terrainHeight = TerrainHeightAt(m_scene.player.position.x, m_scene.player.position.z);
     const float minimumAltitude = terrainHeight + GP_PLAYER_TERRAIN_CLEARANCE_METERS * GP_WORLD_UNITS_PER_METER;
     const float maximumAltitude = minimumAltitude + 85.0f * GP_WORLD_UNITS_PER_METER;
-    m_helicopterPosition.y = std::clamp(m_helicopterPosition.y, minimumAltitude, maximumAltitude);
+    m_scene.player.position.y = std::clamp(m_scene.player.position.y, minimumAltitude, maximumAltitude);
 
     // 적 객체도 하이트맵 높이에 맞춰 지면 위로 조정
-    for (Target& target : m_targets)
+    for (Enemy& target : m_scene.enemies)
     {
         if (target.active)
         {
@@ -275,13 +342,13 @@ void AssignmentGame::UpdateLevel(float deltaSeconds)
         }
     }
 
-    m_rotorAngle += 22.0f * deltaSeconds;
+    m_scene.player.rotorAngle += 22.0f * deltaSeconds;
 
     // 발사는 마우스 클릭에서 처리, 여기선 쿨다운만 줄이기
-    m_shotCooldown = std::max(0.0f, m_shotCooldown - deltaSeconds);
+    m_scene.player.shotCooldown = std::max(0.0f, m_scene.player.shotCooldown - deltaSeconds);
 
     // 미사일 이동
-    for (Bullet& bullet : m_bullets)
+    for (Bullet& bullet : m_scene.bullets)
     {
         const float currentSpeed = std::sqrt(std::max(0.0001f, DistanceSquared(bullet.velocity, { 0.0f, 0.0f, 0.0f })));
         if (bullet.homing && IsTargetIndexValid(bullet.targetIndex))
@@ -293,7 +360,7 @@ void AssignmentGame::UpdateLevel(float deltaSeconds)
             }
             else
             {
-                const Target& target = m_targets[static_cast<std::size_t>(bullet.targetIndex)];
+                const Enemy& target = m_scene.enemies[static_cast<std::size_t>(bullet.targetIndex)];
                 const XMFLOAT3 targetPoint{ target.position.x, target.position.y + 0.65f, target.position.z };
                 const XMFLOAT3 desiredDirection = Collision::Normalize(
                     {
@@ -352,20 +419,20 @@ void AssignmentGame::UpdateLevel(float deltaSeconds)
             }
         }
     }
-    std::erase_if(m_bullets, [](const Bullet& bullet)
+    std::erase_if(m_scene.bullets, [](const Bullet& bullet)
     {
         return bullet.lifeSeconds <= 0.0f;
     });
 
     // 탄환/표적 충돌 검사
-    for (Bullet& bullet : m_bullets)
+    for (Bullet& bullet : m_scene.bullets)
     {
         if (bullet.lifeSeconds <= 0.0f)
         {
             continue;
         }
 
-        for (Target& target : m_targets)
+        for (Enemy& target : m_scene.enemies)
         {
             const float hitRadius = bullet.homing ? 4.0f : 1.8f;
             if (target.active && DistanceSquared(bullet.position, target.position) < hitRadius * hitRadius)
@@ -377,23 +444,23 @@ void AssignmentGame::UpdateLevel(float deltaSeconds)
             }
         }
     }
-    std::erase_if(m_bullets, [](const Bullet& bullet)
+    std::erase_if(m_scene.bullets, [](const Bullet& bullet)
     {
         return bullet.lifeSeconds <= 0.0f;
     });
 
     // 폭발 파티클 수명 갱신, 끝났으면 제거
-    for (Explosion& explosion : m_explosions)
+    for (Explosion& explosion : m_scene.explosions)
     {
         explosion.elapsedSeconds += deltaSeconds;
     }
-    std::erase_if(m_explosions, [](const Explosion& explosion)
+    std::erase_if(m_scene.explosions, [](const Explosion& explosion)
     {
         return explosion.elapsedSeconds >= explosion.durationSeconds;
     });
 
     // 미사일 트레일 이펙트는 재사용
-    for (MissileTrailParticle& particle : m_missileTrails)
+    for (MissileTrailParticle& particle : m_scene.missileTrails)
     {
         if (!particle.active)
         {
@@ -414,12 +481,12 @@ void AssignmentGame::UpdateLevel(float deltaSeconds)
     UpdateAimRay();
 }
 
-void AssignmentGame::UpdateAimRay()
+void GameManager::UpdateAimRay()
 {
     // 헬리콥터 총구에서 광선 발사
-    const float maxAimDistance = std::max({ GP_TERRAIN_HALF_SIZE_METERS, m_terrain.HalfWidth(), m_terrain.HalfLength() }) * 2.0f;
-    m_aimDirection = ForwardDirection();
-    const Collision::Ray ray{ MuzzlePosition(), m_aimDirection };
+    const float maxAimDistance = std::max({ GP_TERRAIN_HALF_SIZE_METERS, m_scene.terrain.HalfWidth(), m_scene.terrain.HalfLength() }) * 2.0f;
+    m_scene.aimDirection = ForwardDirection();
+    const Collision::Ray ray{ MuzzlePosition(), m_scene.aimDirection };
 
     Collision::HitResult bestHit{};
     bestHit.distance = maxAimDistance;
@@ -428,9 +495,9 @@ void AssignmentGame::UpdateAimRay()
     float bestLockScore = -1.0f;
 
     // 가장 가까운 충돌점 선택
-    for (std::size_t targetIndex = 0; targetIndex < m_targets.size(); ++targetIndex)
+    for (std::size_t targetIndex = 0; targetIndex < m_scene.enemies.size(); ++targetIndex)
     {
-        const Target& target = m_targets[targetIndex];
+        const Enemy& target = m_scene.enemies[targetIndex];
         if (!target.active)
         {
             continue;
@@ -466,17 +533,17 @@ void AssignmentGame::UpdateAimRay()
 
     // 락온 고정 X -> 직접 맞춘 표적 최우선, 락온 고정 중이면 기존 대상 유지
     const int automaticLockIndex = (hitTargetIndex >= 0) ? hitTargetIndex : lockCandidateIndex;
-    if (m_lockPinned)
+    if (m_scene.lockPinned)
     {
-        if (!IsTargetIndexValid(m_lockedTargetIndex))
+        if (!IsTargetIndexValid(m_scene.lockedTargetIndex))
         {
-            m_lockPinned = false;
-            m_lockedTargetIndex = automaticLockIndex;
+            m_scene.lockPinned = false;
+            m_scene.lockedTargetIndex = automaticLockIndex;
         }
     }
     else
     {
-        m_lockedTargetIndex = automaticLockIndex;
+        m_scene.lockedTargetIndex = automaticLockIndex;
     }
 
     Collision::HitResult terrainHit{};
@@ -492,13 +559,13 @@ void AssignmentGame::UpdateAimRay()
         bestHit.position = Collision::PointAt(ray, maxAimDistance);
     }
 
-    m_crosshairValid = bestHit.hit;
-    m_crosshairPosition = bestHit.position;
+    m_scene.crosshairValid = bestHit.hit;
+    m_scene.crosshairPosition = bestHit.position;
 }
 
-void AssignmentGame::FireBulletAtAim()
+void GameManager::FireBulletAtAim()
 {
-    if (m_shotCooldown > 0.0f)
+    if (m_scene.player.shotCooldown > 0.0f)
     {
         return;
     }
@@ -511,18 +578,18 @@ void AssignmentGame::FireBulletAtAim()
     bullet.position = muzzle;
     bullet.velocity = Collision::Scale(launchDirection, 55.0f * GP_WORLD_UNITS_PER_METER);
     bullet.lifeSeconds = 10.0f;
-    bullet.homing = IsTargetIndexValid(m_lockedTargetIndex);
-    bullet.targetIndex = bullet.homing ? m_lockedTargetIndex : -1;
+    bullet.homing = IsTargetIndexValid(m_scene.lockedTargetIndex);
+    bullet.targetIndex = bullet.homing ? m_scene.lockedTargetIndex : -1;
     bullet.homingDelaySeconds = bullet.homing ? MissileHomingDelaySeconds : 0.0f;
     bullet.trailSpawnAccumulator = MissileTrailSpawnIntervalSeconds;
-    m_bullets.push_back(bullet);
-    m_shotCooldown = 0.18f;
+    m_scene.bullets.push_back(bullet);
+    m_scene.player.shotCooldown = 0.18f;
 }
 
-void AssignmentGame::SpawnMissileTrail(const XMFLOAT3& position, const XMFLOAT3& missileDirection)
+void GameManager::SpawnMissileTrail(const XMFLOAT3& position, const XMFLOAT3& missileDirection)
 {
-    MissileTrailParticle& particle = m_missileTrails[m_nextMissileTrailIndex];
-    m_nextMissileTrailIndex = (m_nextMissileTrailIndex + 1) % m_missileTrails.size();
+    MissileTrailParticle& particle = m_scene.missileTrails[m_scene.nextMissileTrailIndex];
+    m_scene.nextMissileTrailIndex = (m_scene.nextMissileTrailIndex + 1) % m_scene.missileTrails.size();
 
     particle.position = position;
     particle.velocity =
@@ -537,7 +604,7 @@ void AssignmentGame::SpawnMissileTrail(const XMFLOAT3& position, const XMFLOAT3&
     particle.active = true;
 }
 
-void AssignmentGame::SpawnExplosion(const XMFLOAT3& position, const XMFLOAT4& color, float radius)
+void GameManager::SpawnExplosion(const XMFLOAT3& position, const XMFLOAT4& color, float radius)
 {
     Explosion explosion{};
     explosion.position = position;
@@ -545,36 +612,36 @@ void AssignmentGame::SpawnExplosion(const XMFLOAT3& position, const XMFLOAT4& co
     explosion.elapsedSeconds = 0.0f;
     explosion.durationSeconds = ExplosionDurationSeconds;
     explosion.radius = radius;
-    m_explosions.push_back(explosion);
+    m_scene.explosions.push_back(explosion);
 }
 
-void AssignmentGame::BuildDrawItems()
+void GameManager::BuildDrawItems()
 {
-    m_drawItems.clear();
-    m_drawItems.reserve(1024);
+    m_scene.drawItems.clear();
+    m_scene.drawItems.reserve(1024);
 
-    switch (m_scene)
+    switch (m_scene.Name())
     {
-    case SceneMode::Start:
+    case SceneName::Start:
         BuildStartScene();
         break;
-    case SceneMode::Menu:
+    case SceneName::Menu:
         BuildMenuScene();
         break;
-    case SceneMode::Level1:
+    case SceneName::Level1:
         BuildLevelScene();
         break;
     }
 }
 
-void AssignmentGame::BuildStartScene()
+void GameManager::BuildStartScene()
 {
     AddText3D(L"3D GAME PROGRAMMING 1", { 0.0f, 1.35f, 0.0f }, 0.090f, 0.13f, { 0.65f, 0.88f, 1.0f, 1.0f });
 
-    const float nameYaw = m_nameExploding ? m_nameExplosionYaw : m_totalTime * 1.7f;
-    if (m_nameExploding)
+    const float nameYaw = m_scene.titleExploding ? m_scene.titleExplosionYaw : m_totalTime * 1.7f;
+    if (m_scene.titleExploding)
     {
-        AddExplodingText3D(L"PLAY", { 0.0f, -0.55f, 0.0f }, 0.20f, 0.20f, { 1.0f, 0.82f, 0.20f, 1.0f }, nameYaw, m_nameExplosionTime);
+        AddExplodingText3D(L"PLAY", { 0.0f, -0.55f, 0.0f }, 0.20f, 0.20f, { 1.0f, 0.82f, 0.20f, 1.0f }, nameYaw, m_scene.titleExplosionTime);
     }
     else
     {
@@ -584,26 +651,26 @@ void AssignmentGame::BuildStartScene()
     AddText3D(L"CLICK PLAY", { 0.0f, -2.1f, 0.0f }, 0.10f, 0.10f, { 0.78f, 0.80f, 0.86f, 1.0f });
 }
 
-void AssignmentGame::BuildMenuScene()
+void GameManager::BuildMenuScene()
 {
     AddText3D(L"MENU", { 0.0f, 2.55f, 0.0f }, 0.13f, 0.13f, { 0.85f, 0.95f, 1.0f, 1.0f });
 
-    for (const MenuEntry& entry : m_menuEntries)
+    for (const MenuEntry& entry : m_scene.menuEntries)
     {
         const int hoveredIndex = HitMenuEntry(m_mouseX, m_mouseY);
-        const bool hovered = hoveredIndex >= 0 && m_menuEntries[hoveredIndex].label == entry.label;
+        const bool hovered = hoveredIndex >= 0 && m_scene.menuEntries[hoveredIndex].label == entry.label;
         const XMFLOAT4 color = hovered ? XMFLOAT4{ 1.0f, 0.82f, 0.25f, 1.0f } : XMFLOAT4{ 0.68f, 0.86f, 0.95f, 1.0f };
         AddText3D(entry.label, { 0.0f, entry.y, 0.0f }, MenuTextUnitSize, MenuTextDepth, color, 0.0f, true, MenuGlyphSpacing);
     }
 }
 
-void AssignmentGame::BuildLevelScene()
+void GameManager::BuildLevelScene()
 {
     DrawItem terrainItem{};
     terrainItem.mesh = MeshType::Terrain;
     XMStoreFloat4x4(&terrainItem.world, XMMatrixIdentity());
     terrainItem.color = { 1.0f, 1.0f, 1.0f, 1.0f };
-    m_drawItems.push_back(terrainItem);
+    m_scene.drawItems.push_back(terrainItem);
 
     // 헬리콥터는 Apache 모델을 우선 사용, 표적과 탄환은 박스
     AddHelicopter();
@@ -615,46 +682,46 @@ void AssignmentGame::BuildLevelScene()
     AddLockOnIndicator();
 }
 
-void AssignmentGame::AddHelicopter()
+void GameManager::AddHelicopter()
 {
-    if (m_apacheModelLoaded)
+    if (m_assets.modelLoaded)
     {
-        const XMMATRIX modelWorld = ApacheModelWorldMatrix();
-        for (std::size_t partIndex = 0; partIndex < m_apacheParts.size(); ++partIndex)
+        const XMMATRIX modelWorld = PlayerModelWorldMatrix();
+        for (std::size_t partIndex = 0; partIndex < m_assets.modelParts.size(); ++partIndex)
         {
-            if (m_drawItems.size() >= MaxDrawItems)
+            if (m_scene.drawItems.size() >= MaxDrawItems)
             {
                 return;
             }
 
-            const ApacheMeshPart& part = m_apacheParts[partIndex];
+            const ModelMeshPart& part = m_assets.modelParts[partIndex];
             XMMATRIX partAnimation = XMMatrixIdentity();
             if (part.mainRotor)
             {
                 partAnimation =
                     XMMatrixTranslation(-part.center.x, -part.center.y, -part.center.z) *
-                    XMMatrixRotationY(m_rotorAngle * 1.8f) *
+                    XMMatrixRotationY(m_scene.player.rotorAngle * 1.8f) *
                     XMMatrixTranslation(part.center.x, part.center.y, part.center.z);
             }
             else if (part.tailRotor)
             {
                 partAnimation =
                     XMMatrixTranslation(-part.center.x, -part.center.y, -part.center.z) *
-                    XMMatrixRotationX(m_rotorAngle * 3.2f) *
+                    XMMatrixRotationX(m_scene.player.rotorAngle * 3.2f) *
                     XMMatrixTranslation(part.center.x, part.center.y, part.center.z);
             }
 
             DrawItem item{};
-            item.mesh = MeshType::Apache;
+            item.mesh = MeshType::Model;
             item.meshPartIndex = partIndex;
             XMStoreFloat4x4(&item.world, partAnimation * modelWorld);
             item.color = { 1.0f, 1.0f, 1.0f, 1.0f };
-            m_drawItems.push_back(item);
+            m_scene.drawItems.push_back(item);
         }
         return;
     }
 
-    const XMMATRIX parent = XMMatrixRotationRollPitchYaw(-m_helicopterPitch * 0.45f, m_helicopterYaw, 0.0f) * XMMatrixTranslation(m_helicopterPosition.x, m_helicopterPosition.y, m_helicopterPosition.z);
+    const XMMATRIX parent = XMMatrixRotationRollPitchYaw(-m_scene.player.pitch * 0.45f, m_scene.player.yaw, 0.0f) * XMMatrixTranslation(m_scene.player.position.x, m_scene.player.position.y, m_scene.player.position.z);
 
     auto addPart = [this, parent](const XMFLOAT3& localPosition, const XMFLOAT3& size, const XMFLOAT4& color, const XMMATRIX& localRotation = XMMatrixIdentity())
     {
@@ -668,10 +735,10 @@ void AssignmentGame::AddHelicopter()
     addPart({ 0.0f, 0.03f, -1.55f }, { 0.24f, 0.24f, 1.75f }, { 0.10f, 0.22f, 0.58f, 1.0f });
     addPart({ 0.0f, 0.02f, -2.55f }, { 0.48f, 0.48f, 0.12f }, { 0.16f, 0.28f, 0.70f, 1.0f });
 
-    addPart({ 0.0f, 0.48f, 0.0f }, { 3.25f, 0.05f, 0.14f }, { 0.95f, 0.95f, 0.98f, 1.0f }, XMMatrixRotationY(m_rotorAngle));
-    addPart({ 0.0f, 0.49f, 0.0f }, { 0.14f, 0.05f, 3.25f }, { 0.95f, 0.95f, 0.98f, 1.0f }, XMMatrixRotationY(m_rotorAngle));
-    addPart({ 0.34f, 0.02f, -2.72f }, { 0.08f, 0.85f, 0.10f }, { 0.95f, 0.92f, 0.75f, 1.0f }, XMMatrixRotationX(m_rotorAngle * 1.7f));
-    addPart({ 0.34f, 0.02f, -2.72f }, { 0.08f, 0.10f, 0.85f }, { 0.95f, 0.92f, 0.75f, 1.0f }, XMMatrixRotationX(m_rotorAngle * 1.7f));
+    addPart({ 0.0f, 0.48f, 0.0f }, { 3.25f, 0.05f, 0.14f }, { 0.95f, 0.95f, 0.98f, 1.0f }, XMMatrixRotationY(m_scene.player.rotorAngle));
+    addPart({ 0.0f, 0.49f, 0.0f }, { 0.14f, 0.05f, 3.25f }, { 0.95f, 0.95f, 0.98f, 1.0f }, XMMatrixRotationY(m_scene.player.rotorAngle));
+    addPart({ 0.34f, 0.02f, -2.72f }, { 0.08f, 0.85f, 0.10f }, { 0.95f, 0.92f, 0.75f, 1.0f }, XMMatrixRotationX(m_scene.player.rotorAngle * 1.7f));
+    addPart({ 0.34f, 0.02f, -2.72f }, { 0.08f, 0.10f, 0.85f }, { 0.95f, 0.92f, 0.75f, 1.0f }, XMMatrixRotationX(m_scene.player.rotorAngle * 1.7f));
     addPart({ 0.0f, -0.02f, 1.35f }, { 0.18f, 0.18f, 0.50f }, { 0.08f, 0.08f, 0.10f, 1.0f });
 
     addPart({ -0.48f, -0.48f, 0.1f }, { 0.10f, 0.08f, 1.65f }, { 0.08f, 0.10f, 0.18f, 1.0f });
@@ -682,17 +749,17 @@ void AssignmentGame::AddHelicopter()
     addPart({ 0.35f, -0.27f, -0.55f }, { 0.08f, 0.42f, 0.08f }, { 0.08f, 0.10f, 0.18f, 1.0f });
 }
 
-XMMATRIX AssignmentGame::ApacheModelWorldMatrix() const
+XMMATRIX GameManager::PlayerModelWorldMatrix() const
 {
     return
         XMMatrixScaling(GP_APACHE_MODEL_SCALE, GP_APACHE_MODEL_SCALE, GP_APACHE_MODEL_SCALE) *
-        XMMatrixRotationRollPitchYaw(-m_helicopterPitch * 0.45f, m_helicopterYaw, 0.0f) *
-        XMMatrixTranslation(m_helicopterPosition.x, m_helicopterPosition.y, m_helicopterPosition.z);
+        XMMatrixRotationRollPitchYaw(-m_scene.player.pitch * 0.45f, m_scene.player.yaw, 0.0f) *
+        XMMatrixTranslation(m_scene.player.position.x, m_scene.player.position.y, m_scene.player.position.z);
 }
 
-void AssignmentGame::AddTargets()
+void GameManager::AddTargets()
 {
-    for (const Target& target : m_targets)
+    for (const Enemy& target : m_scene.enemies)
     {
         if (!target.active)
         {
@@ -703,9 +770,9 @@ void AssignmentGame::AddTargets()
     }
 }
 
-void AssignmentGame::AddMissileTrails()
+void GameManager::AddMissileTrails()
 {
-    for (const MissileTrailParticle& particle : m_missileTrails)
+    for (const MissileTrailParticle& particle : m_scene.missileTrails)
     {
         if (!particle.active)
         {
@@ -724,9 +791,9 @@ void AssignmentGame::AddMissileTrails()
     }
 }
 
-void AssignmentGame::AddBullets()
+void GameManager::AddBullets()
 {
-    for (const Bullet& bullet : m_bullets)
+    for (const Bullet& bullet : m_scene.bullets)
     {
         const XMFLOAT3 direction = Collision::Normalize(bullet.velocity);
         const float yaw = std::atan2(direction.x, direction.z);
@@ -737,9 +804,9 @@ void AssignmentGame::AddBullets()
     }
 }
 
-void AssignmentGame::AddExplosions()
+void GameManager::AddExplosions()
 {
-    for (const Explosion& explosion : m_explosions)
+    for (const Explosion& explosion : m_scene.explosions)
     {
         const float t = std::clamp(explosion.elapsedSeconds / std::max(0.0001f, explosion.durationSeconds), 0.0f, 1.0f);
         const float burst = 1.0f - (1.0f - t) * (1.0f - t);
@@ -769,14 +836,14 @@ void AssignmentGame::AddExplosions()
     }
 }
 
-void AssignmentGame::AddCrosshair()
+void GameManager::AddCrosshair()
 {
-    if (!m_crosshairValid)
+    if (!m_scene.crosshairValid)
     {
         return;
     }
 
-    const XMFLOAT3 p{ m_crosshairPosition.x, m_crosshairPosition.y + 0.05f, m_crosshairPosition.z };
+    const XMFLOAT3 p{ m_scene.crosshairPosition.x, m_scene.crosshairPosition.y + 0.05f, m_scene.crosshairPosition.z };
     const float markerSize = ScreenConstantScaleAt(p, 0.035f);
     const float markerThickness = std::max(0.10f, markerSize * 0.08f);
     AddBox(p, { markerSize, markerThickness, markerThickness }, { 1.0f, 0.12f, 0.10f, 1.0f });
@@ -784,20 +851,20 @@ void AssignmentGame::AddCrosshair()
     AddBox(p, { markerThickness, markerThickness, markerSize }, { 1.0f, 0.12f, 0.10f, 1.0f });
 }
 
-void AssignmentGame::AddLockOnIndicator()
+void GameManager::AddLockOnIndicator()
 {
-    if (!IsTargetIndexValid(m_lockedTargetIndex))
+    if (!IsTargetIndexValid(m_scene.lockedTargetIndex))
     {
         return;
     }
 
-    const Target& target = m_targets[static_cast<std::size_t>(m_lockedTargetIndex)];
+    const Enemy& target = m_scene.enemies[static_cast<std::size_t>(m_scene.lockedTargetIndex)];
     const XMFLOAT3 center{ target.position.x, target.position.y + 1.15f, target.position.z };
     const float size = ScreenConstantScaleAt(center, 0.050f);
     const float thickness = std::max(0.12f, size * 0.075f);
     const float half = size * 0.65f;
     const float segment = size * 0.42f;
-    const XMFLOAT4 lockColor = m_lockPinned ? XMFLOAT4{ 0.18f, 0.96f, 1.0f, 1.0f } : XMFLOAT4{ 1.0f, 0.86f, 0.08f, 1.0f };
+    const XMFLOAT4 lockColor = m_scene.lockPinned ? XMFLOAT4{ 0.18f, 0.96f, 1.0f, 1.0f } : XMFLOAT4{ 1.0f, 0.86f, 0.08f, 1.0f };
 
     AddBox({ center.x - half, center.y + half, center.z }, { thickness, segment, thickness }, lockColor);
     AddBox({ center.x - half + segment * 0.5f, center.y + half, center.z }, { segment, thickness, thickness }, lockColor);
@@ -809,15 +876,15 @@ void AssignmentGame::AddLockOnIndicator()
     AddBox({ center.x + half - segment * 0.5f, center.y - half, center.z }, { segment, thickness, thickness }, lockColor);
 }
 
-void AssignmentGame::AddBox(const XMFLOAT3& center, const XMFLOAT3& size, const XMFLOAT4& color, float yaw, float pitch, float roll)
+void GameManager::AddBox(const XMFLOAT3& center, const XMFLOAT3& size, const XMFLOAT4& color, float yaw, float pitch, float roll)
 {
     const XMMATRIX world = XMMatrixScaling(size.x, size.y, size.z) * XMMatrixRotationRollPitchYaw(pitch, yaw, roll) * XMMatrixTranslation(center.x, center.y, center.z);
     AddBoxWithWorld(world, color);
 }
 
-void AssignmentGame::AddBoxWithWorld(const XMMATRIX& world, const XMFLOAT4& color)
+void GameManager::AddBoxWithWorld(const XMMATRIX& world, const XMFLOAT4& color)
 {
-    if (m_drawItems.size() >= MaxDrawItems)
+    if (m_scene.drawItems.size() >= MaxDrawItems)
     {
         return;
     }
@@ -826,10 +893,10 @@ void AssignmentGame::AddBoxWithWorld(const XMMATRIX& world, const XMFLOAT4& colo
     item.mesh = MeshType::Cube;
     XMStoreFloat4x4(&item.world, world);
     item.color = color;
-    m_drawItems.push_back(item);
+    m_scene.drawItems.push_back(item);
 }
 
-void AssignmentGame::AddText3D(const std::wstring& text, const XMFLOAT3& origin, float unitSize, float depth, const XMFLOAT4& color, float yaw, bool centered, float glyphSpacing)
+void GameManager::AddText3D(const std::wstring& text, const XMFLOAT3& origin, float unitSize, float depth, const XMFLOAT4& color, float yaw, bool centered, float glyphSpacing)
 {
     float totalUnits = 0.0f;
     for (wchar_t ch : text)
@@ -875,7 +942,7 @@ void AssignmentGame::AddText3D(const std::wstring& text, const XMFLOAT3& origin,
     }
 }
 
-void AssignmentGame::AddExplodingText3D(const std::wstring& text, const XMFLOAT3& origin, float unitSize, float depth, const XMFLOAT4& color, float yaw, float explosionTime)
+void GameManager::AddExplodingText3D(const std::wstring& text, const XMFLOAT3& origin, float unitSize, float depth, const XMFLOAT4& color, float yaw, float explosionTime)
 {
     // 폭발 애니메이션은 각 글자 블록이 중심에서 바깥으로 멀어지게
     float totalUnits = 0.0f;
@@ -930,14 +997,14 @@ void AssignmentGame::AddExplodingText3D(const std::wstring& text, const XMFLOAT3
     }
 }
 
-bool AssignmentGame::HitStartName(int x, int y) const
+bool GameManager::HitStartName(int x, int y) const
 {
     const float nx = static_cast<float>(x) / static_cast<float>(std::max(1u, m_width));
     const float ny = static_cast<float>(y) / static_cast<float>(std::max(1u, m_height));
     return nx >= 0.38f && nx <= 0.62f && ny >= 0.45f && ny <= 0.63f;
 }
 
-int AssignmentGame::HitMenuEntry(int x, int y) const
+int GameManager::HitMenuEntry(int x, int y) const
 {
     const float mouseX = static_cast<float>(x) / static_cast<float>(std::max(1u, m_width));
     const float mouseY = static_cast<float>(y) / static_cast<float>(std::max(1u, m_height));
@@ -954,9 +1021,9 @@ int AssignmentGame::HitMenuEntry(int x, int y) const
         };
     };
 
-    for (std::size_t i = 0; i < m_menuEntries.size(); ++i)
+    for (std::size_t i = 0; i < m_scene.menuEntries.size(); ++i)
     {
-        const MenuEntry& entry = m_menuEntries[i];
+        const MenuEntry& entry = m_scene.menuEntries[i];
         const float halfWidth = TextWorldWidth(entry.label, MenuTextUnitSize, MenuGlyphSpacing) * 0.5f + MenuTextUnitSize * 0.6f;
         const float halfHeight = 7.0f * MenuTextUnitSize * 0.5f + MenuTextUnitSize * 0.6f;
         const XMFLOAT2 topLeft = projectToScreen({ -halfWidth, entry.y + halfHeight, 0.0f });
@@ -975,7 +1042,7 @@ int AssignmentGame::HitMenuEntry(int x, int y) const
     return -1;
 }
 
-void AssignmentGame::ResetLevel()
+void GameManager::ResetLevel()
 {
     const auto placeOnTerrain = [this](float x, float z, float clearanceMeters)
     {
@@ -987,26 +1054,26 @@ void AssignmentGame::ResetLevel()
         };
     };
 
-    const float usableHalfX = std::max(80.0f * GP_WORLD_UNITS_PER_METER, (m_terrain.HalfWidth() > 0.0f ? m_terrain.HalfWidth() : GP_TERRAIN_HALF_SIZE_METERS) - 24.0f * GP_WORLD_UNITS_PER_METER);
-    const float usableHalfZ = std::max(120.0f * GP_WORLD_UNITS_PER_METER, (m_terrain.HalfLength() > 0.0f ? m_terrain.HalfLength() : GP_TERRAIN_HALF_SIZE_METERS) - 24.0f * GP_WORLD_UNITS_PER_METER);
-    m_helicopterPosition = placeOnTerrain(0.0f, -usableHalfZ * 0.45f, GP_PLAYER_TERRAIN_CLEARANCE_METERS);
-    m_helicopterYaw = 0.0f;
-    m_helicopterPitch = 0.0f;
-    m_rotorAngle = 0.0f;
-    m_shotCooldown = 0.0f;
-    m_crosshairValid = false;
-    m_lockedTargetIndex = -1;
-    m_lockPinned = false;
+    const float usableHalfX = std::max(80.0f * GP_WORLD_UNITS_PER_METER, (m_scene.terrain.HalfWidth() > 0.0f ? m_scene.terrain.HalfWidth() : GP_TERRAIN_HALF_SIZE_METERS) - 24.0f * GP_WORLD_UNITS_PER_METER);
+    const float usableHalfZ = std::max(120.0f * GP_WORLD_UNITS_PER_METER, (m_scene.terrain.HalfLength() > 0.0f ? m_scene.terrain.HalfLength() : GP_TERRAIN_HALF_SIZE_METERS) - 24.0f * GP_WORLD_UNITS_PER_METER);
+    m_scene.player.position = placeOnTerrain(0.0f, -usableHalfZ * 0.45f, GP_PLAYER_TERRAIN_CLEARANCE_METERS);
+    m_scene.player.yaw = 0.0f;
+    m_scene.player.pitch = 0.0f;
+    m_scene.player.rotorAngle = 0.0f;
+    m_scene.player.shotCooldown = 0.0f;
+    m_scene.crosshairValid = false;
+    m_scene.lockedTargetIndex = -1;
+    m_scene.lockPinned = false;
     m_hasLastMousePosition = false;
-    m_bullets.clear();
-    m_explosions.clear();
-    for (MissileTrailParticle& particle : m_missileTrails)
+    m_scene.bullets.clear();
+    m_scene.explosions.clear();
+    for (MissileTrailParticle& particle : m_scene.missileTrails)
     {
         particle.active = false;
     }
-    m_nextMissileTrailIndex = 0;
-    m_targets.clear();
-    m_targets.reserve(static_cast<std::size_t>(std::max(0, GP_LEVEL_TARGET_COUNT)));
+    m_scene.nextMissileTrailIndex = 0;
+    m_scene.enemies.clear();
+    m_scene.enemies.reserve(static_cast<std::size_t>(std::max(0, GP_LEVEL_TARGET_COUNT)));
     for (int targetIndex = 0; targetIndex < GP_LEVEL_TARGET_COUNT; ++targetIndex)
     {
         const float normalizedIndex = (GP_LEVEL_TARGET_COUNT <= 1) ? 0.0f : static_cast<float>(targetIndex) / static_cast<float>(GP_LEVEL_TARGET_COUNT - 1);
@@ -1014,34 +1081,34 @@ void AssignmentGame::ResetLevel()
         const float spread = 0.28f + normalizedIndex * 0.60f;
         const float x = std::sin(angle) * usableHalfX * 0.72f * spread;
         const float z = usableHalfZ * (-0.04f + normalizedIndex * 0.78f) + std::cos(angle) * usableHalfZ * 0.07f;
-        m_targets.push_back({ placeOnTerrain(x, z, GP_ENEMY_TERRAIN_CLEARANCE_METERS), true });
+        m_scene.enemies.push_back({ placeOnTerrain(x, z, GP_ENEMY_TERRAIN_CLEARANCE_METERS), true });
     }
     UpdateAimRay();
 }
 
-bool AssignmentGame::IsTargetIndexValid(int targetIndex) const
+bool GameManager::IsTargetIndexValid(int targetIndex) const
 {
-    if (targetIndex < 0 || targetIndex >= static_cast<int>(m_targets.size()))
+    if (targetIndex < 0 || targetIndex >= static_cast<int>(m_scene.enemies.size()))
     {
         return false;
     }
 
-    return m_targets[static_cast<std::size_t>(targetIndex)].active;
+    return m_scene.enemies[static_cast<std::size_t>(targetIndex)].active;
 }
 
-float AssignmentGame::ScreenConstantScaleAt(const XMFLOAT3& position, float scalePerMeter) const
+float GameManager::ScreenConstantScaleAt(const XMFLOAT3& position, float scalePerMeter) const
 {
     const XMFLOAT3 cameraPosition = LevelCameraPosition();
     const float distance = std::sqrt(std::max(0.0001f, DistanceSquared(position, cameraPosition)));
     return std::clamp(distance * scalePerMeter, 0.35f, 8.0f);
 }
 
-float AssignmentGame::TerrainHeightAt(float worldX, float worldZ) const
+float GameManager::TerrainHeightAt(float worldX, float worldZ) const
 {
-    return m_terrain.HeightAt(worldX, worldZ);
+    return m_scene.terrain.HeightAt(worldX, worldZ);
 }
 
-bool AssignmentGame::RaycastTerrain(const Collision::Ray& ray, float maxDistance, Collision::HitResult& hit, float heightOffset) const
+bool GameManager::RaycastTerrain(const Collision::Ray& ray, float maxDistance, Collision::HitResult& hit, float heightOffset) const
 {
     hit = {};
     if (maxDistance <= 0.0f)
@@ -1049,7 +1116,7 @@ bool AssignmentGame::RaycastTerrain(const Collision::Ray& ray, float maxDistance
         return false;
     }
 
-    if (m_terrain.Empty())
+    if (m_scene.terrain.Empty())
     {
         hit = Collision::RaycastPlaneY(ray, heightOffset, maxDistance);
         if (hit.hit)
@@ -1061,7 +1128,7 @@ bool AssignmentGame::RaycastTerrain(const Collision::Ray& ray, float maxDistance
 
     const auto isInsideTerrain = [this](float worldX, float worldZ)
     {
-        return m_terrain.Contains(worldX, worldZ);
+        return m_scene.terrain.Contains(worldX, worldZ);
     };
 
     const auto sampleDelta = [this, heightOffset, &isInsideTerrain](const XMFLOAT3& point, float& delta)
@@ -1075,7 +1142,7 @@ bool AssignmentGame::RaycastTerrain(const Collision::Ray& ray, float maxDistance
         return true;
     };
 
-    const float step = std::max(0.35f, std::min(m_terrain.CellX(), m_terrain.CellZ()) * 0.5f);
+    const float step = std::max(0.35f, std::min(m_scene.terrain.CellX(), m_scene.terrain.CellZ()) * 0.5f);
     float previousDistance = 0.0f;
     XMFLOAT3 previousPoint = ray.origin;
     float previousDelta = 0.0f;
@@ -1149,25 +1216,25 @@ bool AssignmentGame::RaycastTerrain(const Collision::Ray& ray, float maxDistance
     return false;
 }
 
-XMFLOAT3 AssignmentGame::LevelCameraPosition() const
+XMFLOAT3 GameManager::LevelCameraPosition() const
 {
-    return m_camera.LevelCameraPosition(m_helicopterPosition, m_helicopterYaw);
+    return m_camera.LevelCameraPosition(m_scene.player.position, m_scene.player.yaw);
 }
 
-XMFLOAT3 AssignmentGame::ForwardDirection() const
+XMFLOAT3 GameManager::ForwardDirection() const
 {
-    const float cosPitch = std::cos(m_helicopterPitch);
-    return Collision::Normalize({ std::sin(m_helicopterYaw) * cosPitch, std::sin(m_helicopterPitch), std::cos(m_helicopterYaw) * cosPitch });
+    const float cosPitch = std::cos(m_scene.player.pitch);
+    return Collision::Normalize({ std::sin(m_scene.player.yaw) * cosPitch, std::sin(m_scene.player.pitch), std::cos(m_scene.player.yaw) * cosPitch });
 }
 
-XMFLOAT3 AssignmentGame::MuzzlePosition() const
+XMFLOAT3 GameManager::MuzzlePosition() const
 {
     const XMFLOAT3 forward = ForwardDirection();
-    const float muzzleOffset = m_apacheModelLoaded ? GP_APACHE_MUZZLE_OFFSET_METERS * GP_WORLD_UNITS_PER_METER : 1.55f;
+    const float muzzleOffset = m_assets.modelLoaded ? GP_APACHE_MUZZLE_OFFSET_METERS * GP_WORLD_UNITS_PER_METER : 1.55f;
     return
     {
-        m_helicopterPosition.x + forward.x * muzzleOffset,
-        m_helicopterPosition.y + 0.02f + forward.y * 0.25f,
-        m_helicopterPosition.z + forward.z * muzzleOffset
+        m_scene.player.position.x + forward.x * muzzleOffset,
+        m_scene.player.position.y + 0.02f + forward.y * 0.25f,
+        m_scene.player.position.z + forward.z * muzzleOffset
     };
 }

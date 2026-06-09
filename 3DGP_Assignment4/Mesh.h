@@ -6,7 +6,7 @@ enum class MeshType : std::size_t
 {
     Cube = 0,
     Terrain = 1,
-    Apache = 2,
+    Model = 2,
     Count = 3
 };
 
@@ -56,7 +56,7 @@ public:
     D3D12_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 };
 
-class ApacheMeshPart
+class ModelMeshPart
 {
 public:
     MeshResource mesh;
@@ -67,25 +67,25 @@ public:
     bool tailRotor = false;
 };
 
-class ApacheModelPart
+class TextMeshModel
 {
 public:
-    std::string name;
-    MeshData meshData;
-    DirectX::XMFLOAT3 center{};
-    DirectX::XMFLOAT3 extents{};
-    bool mainRotor = false;
-    bool tailRotor = false;
-};
+    class Part
+    {
+    public:
+        std::string name;
+        MeshData meshData;
+        DirectX::XMFLOAT3 center{};
+        DirectX::XMFLOAT3 extents{};
+        bool mainRotor = false;
+        bool tailRotor = false;
+    };
 
-class ApacheModel
-{
-public:
     static std::optional<std::filesystem::path> FindDefaultPath();
 
-    bool Load(const std::filesystem::path& filePath);
-    const std::vector<ApacheModelPart>& Parts() const;
+    bool LoadFromTextFile(const std::filesystem::path& filePath);
+    const std::vector<Part>& Parts() const;
 
 private:
-    std::vector<ApacheModelPart> m_parts;
+    std::vector<Part> m_parts;
 };

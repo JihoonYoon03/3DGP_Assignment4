@@ -2,8 +2,6 @@
 
 #include "Mesh.h"
 
-
-
 class DrawItem
 {
 public:
@@ -11,6 +9,16 @@ public:
     std::size_t meshPartIndex = 0;
     DirectX::XMFLOAT4X4 world{};
     DirectX::XMFLOAT4 color{};
+};
+
+class Player
+{
+public:
+    DirectX::XMFLOAT3 position{ 0.0f, 1.3f, -8.0f };
+    float yaw = 0.0f;
+    float pitch = 0.0f;
+    float rotorAngle = 0.0f;
+    float shotCooldown = 0.0f;
 };
 
 class Bullet
@@ -25,7 +33,7 @@ public:
     int targetIndex = -1;
 };
 
-class Target
+class Enemy
 {
 public:
     DirectX::XMFLOAT3 position{};

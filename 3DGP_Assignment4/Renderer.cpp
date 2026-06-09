@@ -358,7 +358,7 @@ void Renderer::CreatePipelineState()
 void Renderer::RenderFrame(
     std::vector<DrawItem>& drawItems,
     const std::array<MeshResource, static_cast<std::size_t>(MeshType::Count)>& meshes,
-    const std::vector<ApacheMeshPart>& apacheParts,
+    const std::vector<ModelMeshPart>& modelParts,
     const XMMATRIX& viewProjection,
     const XMFLOAT3& cameraPosition,
     const XMFLOAT4& clearColor)
@@ -368,7 +368,7 @@ void Renderer::RenderFrame(
         drawItems.resize(MaxDrawItems);
     }
 
-    PopulateCommandList(drawItems, meshes, apacheParts, viewProjection, cameraPosition, clearColor);
+    PopulateCommandList(drawItems, meshes, modelParts, viewProjection, cameraPosition, clearColor);
     ID3D12CommandList* commandLists[] = { m_commandList.Get() };
     m_commandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
 
@@ -380,7 +380,7 @@ void Renderer::RenderFrame(
 void Renderer::PopulateCommandList(
     const std::vector<DrawItem>& drawItems,
     const std::array<MeshResource, static_cast<std::size_t>(MeshType::Count)>& meshes,
-    const std::vector<ApacheMeshPart>& apacheParts,
+    const std::vector<ModelMeshPart>& modelParts,
     const XMMATRIX& viewProjection,
     const XMFLOAT3& cameraPosition,
     const XMFLOAT4& clearColor)
@@ -411,13 +411,13 @@ void Renderer::PopulateCommandList(
     {
         const DrawItem& item = drawItems[itemIndex];
         const MeshResource* mesh = &meshes[static_cast<std::size_t>(item.mesh)];
-        if (item.mesh == MeshType::Apache)
+        if (item.mesh == MeshType::Model)
         {
-            if (item.meshPartIndex >= apacheParts.size())
+            if (item.meshPartIndex >= modelParts.size())
             {
                 continue;
             }
-            mesh = &apacheParts[item.meshPartIndex].mesh;
+            mesh = &modelParts[item.meshPartIndex].mesh;
         }
 
         if (mesh->indexCount == 0 || !mesh->vertexBuffer || !mesh->indexBuffer)

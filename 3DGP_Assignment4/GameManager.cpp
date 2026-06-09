@@ -1,61 +1,52 @@
 #include "pch.h"
-#include "AssignmentGame.h"
+#include "GameManager.h"
 
-AssignmentGame::~AssignmentGame()
+GameManager::~GameManager()
 {
     SetLevelCursorCapture(false);
 }
 
-void AssignmentGame::Initialize(HWND hwnd, UINT width, UINT height)
+void GameManager::Initialize(HWND hwnd, UINT width, UINT height)
 {
-    m_menuEntries =
-    {
-        { L"TUTORIAL", 1.65f },
-        { L"LEVEL-1", 0.90f },
-        { L"LEVEL-2", 0.15f },
-        { L"LEVEL-3", -0.60f },
-        { L"START", -1.35f },
-        { L"END", -2.10f }
-    };
-
+    m_scene.ConfigureDefaultMenu();
     GameFramework::Initialize(hwnd, width, height);
     CreateMeshResources();
     ResetLevel();
 }
 
-void AssignmentGame::Tick(float deltaSeconds)
+void GameManager::Tick(float deltaSeconds)
 {
     const float clampedDelta = std::clamp(deltaSeconds, 0.0f, 0.05f);
     m_totalTime += clampedDelta;
 
     Update(clampedDelta);
-    if (m_scene != SceneMode::Level1 && m_cursorCaptured)
+    if (m_scene != SceneName::Level1 && m_cursorCaptured)
     {
         SetLevelCursorCapture(false);
     }
     Render();
 }
 
-void AssignmentGame::OnResize(UINT width, UINT height)
+void GameManager::OnResize(UINT width, UINT height)
 {
     GameFramework::OnResize(width, height);
 }
 
-void AssignmentGame::OnKeyDown(WPARAM key)
+void GameManager::OnKeyDown(WPARAM key)
 {
     if (key < m_keyDown.size())
     {
         m_keyDown[key] = true;
     }
 
-    if (key == VK_ESCAPE && m_scene == SceneMode::Level1)
+    if (key == VK_ESCAPE && m_scene == SceneName::Level1)
     {
         SetLevelCursorCapture(false);
-        m_scene = SceneMode::Menu;
+        m_scene = SceneName::Menu;
     }
 }
 
-void AssignmentGame::OnKeyUp(WPARAM key)
+void GameManager::OnKeyUp(WPARAM key)
 {
     if (key < m_keyDown.size())
     {
@@ -63,19 +54,18 @@ void AssignmentGame::OnKeyUp(WPARAM key)
     }
 }
 
-void AssignmentGame::OnMouseMove(int x, int y)
+void GameManager::OnMouseMove(int x, int y)
 {
     m_mouseX = x;
     m_mouseY = y;
 
-    if (m_scene == SceneMode::Level1)
+    if (m_scene == SceneName::Level1)
     {
         if (m_hasLastMousePosition)
         {
             const int deltaX = x - m_lastMouseX;
             const int deltaY = y - m_lastMouseY;
-            m_helicopterYaw += static_cast<float>(deltaX) * 0.0045f;
-            m_helicopterPitch = std::clamp(m_helicopterPitch - static_cast<float>(deltaY) * 0.0035f, -0.55f, 0.45f);
+            m_scene.ApplyPlayerLook(deltaX, deltaY);
         }
 
         m_lastMouseX = x;
@@ -101,26 +91,26 @@ void AssignmentGame::OnMouseMove(int x, int y)
     }
 }
 
-void AssignmentGame::OnMouseDown(int x, int y)
+void GameManager::OnMouseDown(int x, int y)
 {
-    if (m_scene == SceneMode::Level1)
+    if (m_scene == SceneName::Level1)
     {
         FireBulletAtAim();
         return;
     }
 
-    if (m_scene == SceneMode::Start)
+    if (m_scene == SceneName::Start)
     {
-        if (!m_nameExploding && HitStartName(x, y))
+        if (!m_scene.titleExploding && HitStartName(x, y))
         {
-            m_nameExploding = true;
-            m_nameExplosionTime = 0.0f;
-            m_nameExplosionYaw = m_totalTime * 1.7f;
+            m_scene.titleExploding = true;
+            m_scene.titleExplosionTime = 0.0f;
+            m_scene.titleExplosionYaw = m_totalTime * 1.7f;
         }
         return;
     }
 
-    if (m_scene == SceneMode::Menu)
+    if (m_scene == SceneName::Menu)
     {
         const int entry = HitMenuEntry(x, y);
         if (entry < 0)
@@ -128,11 +118,11 @@ void AssignmentGame::OnMouseDown(int x, int y)
             return;
         }
 
-        const std::wstring& label = m_menuEntries[entry].label;
+        const std::wstring& label = m_scene.menuEntries[entry].label;
         if (label == L"START" || label == L"LEVEL-1")
         {
             ResetLevel();
-            m_scene = SceneMode::Level1;
+            m_scene = SceneName::Level1;
             SetLevelCursorCapture(true);
         }
         else if (label == L"END")
@@ -142,29 +132,29 @@ void AssignmentGame::OnMouseDown(int x, int y)
     }
 }
 
-void AssignmentGame::OnRightMouseDown(int, int)
+void GameManager::OnRightMouseDown(int, int)
 {
-    if (m_scene != SceneMode::Level1)
+    if (m_scene != SceneName::Level1)
     {
         return;
     }
 
-    if (m_lockPinned)
+    if (m_scene.lockPinned)
     {
-        m_lockPinned = false;
-        m_lockedTargetIndex = -1;
+        m_scene.lockPinned = false;
+        m_scene.lockedTargetIndex = -1;
         UpdateAimRay();
         return;
     }
 
     UpdateAimRay();
-    if (IsTargetIndexValid(m_lockedTargetIndex))
+    if (IsTargetIndexValid(m_scene.lockedTargetIndex))
     {
-        m_lockPinned = true;
+        m_scene.lockPinned = true;
     }
 }
 
-void AssignmentGame::SetLevelCursorCapture(bool enabled)
+void GameManager::SetLevelCursorCapture(bool enabled)
 {
     if (enabled)
     {
@@ -215,35 +205,35 @@ void AssignmentGame::SetLevelCursorCapture(bool enabled)
     m_hasLastMousePosition = false;
 }
 
-void AssignmentGame::Render()
+void GameManager::Render()
 {
     using namespace DirectX;
 
     BuildDrawItems();
 
     const XMMATRIX view =
-        (m_scene == SceneMode::Level1)
+        (m_scene == SceneName::Level1)
         ? LevelViewMatrix()
         : XMMatrixLookAtLH(XMVectorSet(0.0f, 0.0f, -8.5f, 1.0f), XMVectorZero(), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
     const XMMATRIX viewProjection = view * ProjectionMatrix();
     const XMFLOAT3 cameraPosition =
-        (m_scene == SceneMode::Level1)
+        (m_scene == SceneName::Level1)
         ? LevelCameraPosition()
         : XMFLOAT3{ 0.0f, 0.0f, -8.5f };
     const XMFLOAT4 clearColor =
-        (m_scene == SceneMode::Level1)
+        (m_scene == SceneName::Level1)
         ? XMFLOAT4{ 0.38f, 0.55f, 0.78f, 1.0f }
         : XMFLOAT4{ 0.03f, 0.05f, 0.09f, 1.0f };
 
-    RenderFrame(m_drawItems, m_meshes, m_apacheParts, viewProjection, cameraPosition, clearColor);
+    RenderFrame(m_scene.drawItems, m_assets.meshes, m_assets.modelParts, viewProjection, cameraPosition, clearColor);
 }
 
-DirectX::XMMATRIX AssignmentGame::ProjectionMatrix() const
+DirectX::XMMATRIX GameManager::ProjectionMatrix() const
 {
     return m_camera.ProjectionMatrix(m_width, m_height);
 }
 
-DirectX::XMMATRIX AssignmentGame::LevelViewMatrix() const
+DirectX::XMMATRIX GameManager::LevelViewMatrix() const
 {
-    return m_camera.LevelViewMatrix(m_helicopterPosition, m_helicopterYaw, ForwardDirection());
+    return m_camera.LevelViewMatrix(m_scene.player.position, m_scene.player.yaw, ForwardDirection());
 }

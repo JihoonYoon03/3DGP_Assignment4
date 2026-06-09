@@ -145,7 +145,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="3DGP_Assignment4.h" />
-    <ClInclude Include="AssignmentGame.h" />
+    <ClInclude Include="Assets.h" />
+    <ClInclude Include="GameManager.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Collision.h" />
     <ClInclude Include="framework.h" />
@@ -156,12 +157,13 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="Scene.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Terrain.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="3DGP_Assignment4.cpp" />
-    <ClCompile Include="AssignmentGame.cpp" />
+    <ClCompile Include="GameManager.cpp" />
     <ClCompile Include="Assets.cpp" />
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="Collision.cpp" />
