@@ -17,13 +17,13 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <cwctype>
 #include <filesystem>
 #include <fstream>
 #include <limits>
 #include <memory>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>

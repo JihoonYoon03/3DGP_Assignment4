@@ -38,8 +38,6 @@ private:
     void Render();
 
     void CreateMeshResources();
-    bool CreateApacheMesh();
-    bool LoadApacheModelFile(const std::wstring& filePath);
     DirectX::XMMATRIX ApacheModelWorldMatrix() const;
 
     void Update(float deltaSeconds);

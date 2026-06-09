@@ -2,17 +2,17 @@
 
 #include "GameObject.h"
 
-class GameFramework
+class Renderer
 {
 public:
-    GameFramework() = default;
-    virtual ~GameFramework();
+    static constexpr UINT MaxDrawItems = 8192;
+
+    Renderer() = default;
+    ~Renderer();
 
     void Initialize(HWND hwnd, UINT width, UINT height);
-    void OnResize(UINT width, UINT height);
-
-protected:
-    static constexpr UINT MaxDrawItems = 8192;
+    void Resize(UINT width, UINT height);
+    bool IsReady() const;
 
     void RenderFrame(
         std::vector<DrawItem>& drawItems,
@@ -22,17 +22,7 @@ protected:
         const DirectX::XMFLOAT3& cameraPosition,
         const DirectX::XMFLOAT4& clearColor);
 
-    void CreateMeshResource(
-        MeshResource& mesh,
-        const std::vector<Vertex>& vertices,
-        const std::vector<std::uint32_t>& indices,
-        D3D12_PRIMITIVE_TOPOLOGY topology);
-
-    bool IsDeviceReady() const;
-
-    HWND m_hwnd = nullptr;
-    UINT m_width = 1280;
-    UINT m_height = 720;
+    void CreateMeshResource(MeshResource& mesh, const MeshData& meshData);
 
 private:
     static constexpr UINT FrameCount = 2;
@@ -77,6 +67,10 @@ private:
     static D3D12_RESOURCE_BARRIER TransitionBarrier(ID3D12Resource* resource, D3D12_RESOURCE_STATES beforeState, D3D12_RESOURCE_STATES afterState);
     static void ThrowIfFailed(HRESULT hr);
 
+    HWND m_hwnd = nullptr;
+    UINT m_width = 1280;
+    UINT m_height = 720;
+
     Microsoft::WRL::ComPtr<IDXGIFactory4> m_factory;
     Microsoft::WRL::ComPtr<ID3D12Device> m_device;
     Microsoft::WRL::ComPtr<IDXGISwapChain3> m_swapChain;
@@ -95,7 +89,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_depthStencil;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_constantBuffer;
 
-    std::uint8_t* m_mappedConstantBuffer = nullptr;
+    std::byte* m_mappedConstantBuffer = nullptr;
 
     UINT m_rtvDescriptorSize = 0;
     UINT m_dsvDescriptorSize = 0;
