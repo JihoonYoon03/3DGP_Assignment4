@@ -1,4 +1,4 @@
-// 객체별 월드 행렬, 색상, 카메라 위치, 조명 정보
+// ??? ?? ??, ??, ??? ??, ?? ??
 cbuffer ObjectConstants : register(b0)
 {
     float4x4 gWorld;
@@ -28,7 +28,7 @@ struct VertexOut
     float3 normal : NORMAL;
 };
 
-// 정점 변환, 조명 계산 좌표와 노멀 넘기기
+// ?? ??, ?? ?? ??? ?? ???
 VertexOut VSMain(VertexIn input)
 {
     VertexOut output;
@@ -40,9 +40,14 @@ VertexOut VSMain(VertexIn input)
     return output;
 }
 
-// 앰비언트, 디퓨즈, 스페큘러 계산. 방향광 하나 사용
+// ????, ???, ???? ??. ??? ?? ??
 float4 PSMain(VertexOut input) : SV_TARGET
 {
+    if (gLightingOptions.y > 0.5f)
+    {
+        return input.color;
+    }
+
     float3 normal = normalize(input.normal);
     float3 lightToSurface = normalize(gLightDirection.xyz);
     float3 surfaceToLight = -lightToSurface;
@@ -58,3 +63,5 @@ float4 PSMain(VertexOut input) : SV_TARGET
         gSpecularColor.rgb * specularFactor;
     return float4(input.color.rgb * litColor, input.color.a);
 }
+
+

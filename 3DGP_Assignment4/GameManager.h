@@ -40,7 +40,9 @@ private:
     void UpdateTankAimRay();
 
     void FireBulletAtAim();
+    void FireTankShell();
     void FireTankShellAt(int targetIndex);
+    void FireEnemyTankShell(Tank& tank);
 
     void BuildDrawItems();
     void BuildStartScene();
@@ -61,9 +63,11 @@ private:
     void AddExplosions();
     void AddCrosshair();
     void AddLockOnIndicator();
+    void AddLockBrackets(const DirectX::XMFLOAT3& center, const DirectX::XMFLOAT4& color);
     void AddBox(const DirectX::XMFLOAT3& center, const DirectX::XMFLOAT3& size, const DirectX::XMFLOAT4& color, float yaw = 0.0f, float pitch = 0.0f, float roll = 0.0f);
-    void AddBoxWithWorld(const DirectX::XMMATRIX& world, const DirectX::XMFLOAT4& color);
+    void AddBoxWithWorld(const DirectX::XMMATRIX& world, const DirectX::XMFLOAT4& color, bool unlit = false);
     void AddText3D(const std::wstring& text, const DirectX::XMFLOAT3& origin, float unitSize, float depth, const DirectX::XMFLOAT4& color, float yaw = 0.0f, bool centered = true, float glyphSpacing = 0.25f);
+    void AddTextNdc(const std::wstring& text, const DirectX::XMFLOAT2& center, float unitSize, float depth, const DirectX::XMFLOAT4& color, float glyphSpacing = 0.18f);
     void AddExplodingText3D(const std::wstring& text, const DirectX::XMFLOAT3& origin, float unitSize, float depth, const DirectX::XMFLOAT4& color, float yaw, float explosionTime);
 
     void SpawnMissileTrail(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& missileDirection);
@@ -79,10 +83,16 @@ private:
 
     bool IsTargetIndexValid(int targetIndex) const;
     bool IsTankIndexValid(int targetIndex) const;
+    bool AimTankAtPoint(Tank& tank, const DirectX::XMFLOAT3& targetPoint, float deltaSeconds) const;
+    bool AimPlayerTankTurretAt(int targetIndex, float deltaSeconds);
+    DirectX::XMFLOAT3 TankMuzzlePosition(const Tank& tank) const;
+    int PickTankFromPlayerBarrel() const;
     int PickTankAtScreen(int x, int y) const;
     int NearestActiveTankIndex(const DirectX::XMFLOAT3& origin) const;
     bool AllEnemyTanksDestroyed() const;
     bool ReachedLevelExit() const;
+    bool TankCollidesWithObstacle(const DirectX::XMFLOAT3& position) const;
+    void PlaceTankOnTerrain(Tank& tank);
 
     float ScreenConstantScaleAt(const DirectX::XMFLOAT3& position, float scalePerMeter) const;
     float TerrainHeightAt(float worldX, float worldZ) const;
@@ -90,11 +100,13 @@ private:
     Collision::Ray ScreenRay(int x, int y, const DirectX::XMMATRIX& view) const;
 
     DirectX::XMFLOAT3 LevelCameraPosition() const;
+    DirectX::XMFLOAT3 Level3CameraPosition() const;
     DirectX::XMFLOAT3 ForwardDirection() const;
     DirectX::XMFLOAT3 MuzzlePosition() const;
     DirectX::XMFLOAT3 TankCameraPosition() const;
 
     DirectX::XMMATRIX ProjectionMatrix() const;
+    DirectX::XMMATRIX ActiveViewMatrix() const;
     DirectX::XMMATRIX LevelViewMatrix() const;
     DirectX::XMMATRIX Level2ViewMatrix() const;
     DirectX::XMMATRIX Level3ViewMatrix() const;

@@ -60,6 +60,9 @@ public:
 
     int selectedTankIndex = -1;
     bool level2Win = false;
+    float level2RestartTimer = 0.0f;
+    float level2WinReturnTimer = 0.0f;
+    float level3RestartTimer = 0.0f;
     bool firstPersonHelicopter = false;
 
 private:

@@ -23,7 +23,7 @@ inline constexpr int GP_LEVEL2_ENEMY_TANK_COUNT = 12;
 inline constexpr int GP_LEVEL2_OBSTACLE_COUNT = 56;
 inline constexpr int GP_LEVEL3_ENEMY_TANK_COUNT = 10;
 inline constexpr float GP_TANK_MOVE_SPEED = 22.0f * GP_WORLD_UNITS_PER_METER;
-inline constexpr float GP_TANK_SHELL_SPEED = 48.0f * GP_WORLD_UNITS_PER_METER;
+inline constexpr float GP_TANK_SHELL_SPEED = 96.0f * GP_WORLD_UNITS_PER_METER;
 inline constexpr float GP_TANK_FIRE_RELOAD_SECONDS = 0.55f;
 
 inline constexpr float GP_UNREAL_CENTIMETER_TO_METER = 0.01f;

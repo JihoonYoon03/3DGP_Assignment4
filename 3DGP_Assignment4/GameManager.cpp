@@ -20,7 +20,7 @@ void GameManager::Tick(float deltaSeconds)
     m_totalTime += clampedDelta;
 
     Update(clampedDelta);
-    if (m_scene != SceneName::Level1 && m_scene != SceneName::Level3 && m_cursorCaptured)
+    if (m_scene != SceneName::Level1 && m_scene != SceneName::Level2 && m_scene != SceneName::Level3 && m_cursorCaptured)
     {
         SetLevelCursorCapture(false);
     }
@@ -52,11 +52,17 @@ void GameManager::OnKeyDown(WPARAM key)
     {
         ResetLevel2();
         m_scene = SceneName::Level2;
+        SetLevelCursorCapture(true);
         return;
     }
 
     if (!wasDown && m_scene == SceneName::Level2)
     {
+        if (key == VK_SPACE)
+        {
+            FireTankShell();
+            return;
+        }
         if (key == 'A')
         {
             m_scene.playerTank.ToggleAutoAttack();
@@ -70,6 +76,7 @@ void GameManager::OnKeyDown(WPARAM key)
         if (key == 'W')
         {
             m_scene.level2Win = true;
+            m_scene.level2WinReturnTimer = 2.0f;
             return;
         }
     }
@@ -106,20 +113,7 @@ void GameManager::OnMouseMove(int x, int y)
     m_mouseX = x;
     m_mouseY = y;
 
-    if (m_scene == SceneName::Level2)
-    {
-        if (m_leftMouseDragging && m_hasLastMousePosition)
-        {
-            const int deltaX = x - m_lastMouseX;
-            m_scene.playerTank.RotateYaw(static_cast<float>(deltaX) * 0.0065f);
-        }
-        m_lastMouseX = x;
-        m_lastMouseY = y;
-        m_hasLastMousePosition = true;
-        return;
-    }
-
-    if (m_scene == SceneName::Level1 || m_scene == SceneName::Level3)
+    if (m_scene == SceneName::Level1 || m_scene == SceneName::Level2 || m_scene == SceneName::Level3)
     {
         if (m_hasLastMousePosition)
         {
@@ -161,10 +155,7 @@ void GameManager::OnMouseDown(int x, int y)
 
     if (m_scene == SceneName::Level2)
     {
-        m_leftMouseDragging = true;
-        m_lastMouseX = x;
-        m_lastMouseY = y;
-        m_hasLastMousePosition = true;
+        FireTankShell();
         return;
     }
 
@@ -208,6 +199,7 @@ void GameManager::OnMouseDown(int x, int y)
         {
             ResetLevel2();
             m_scene = SceneName::Level2;
+            SetLevelCursorCapture(true);
         }
         else if (label == L"Level-3")
         {
@@ -231,28 +223,32 @@ void GameManager::OnRightMouseDown(int x, int y)
 {
     if (m_scene == SceneName::Level2)
     {
-        const int pickedTankIndex = PickTankAtScreen(x, y);
+        (void)x;
+        (void)y;
+        const int pickedTankIndex = PickTankFromPlayerBarrel();
         if (IsTankIndexValid(pickedTankIndex))
         {
             m_scene.selectedTankIndex = pickedTankIndex;
-        }
-        else
-        {
-            UpdateTankAimRay();
         }
         return;
     }
 
     if (m_scene == SceneName::Level3)
     {
-        const int pickedTankIndex = PickTankAtScreen(x, y);
-        if (IsTankIndexValid(pickedTankIndex))
+        (void)x;
+        (void)y;
+        if (m_scene.lockPinned)
         {
-            m_scene.selectedTankIndex = pickedTankIndex;
-        }
-        else
-        {
+            m_scene.lockPinned = false;
+            m_scene.selectedTankIndex = -1;
             UpdateTankAimRay();
+            return;
+        }
+
+        UpdateTankAimRay();
+        if (IsTankIndexValid(m_scene.selectedTankIndex))
+        {
+            m_scene.lockPinned = true;
         }
         return;
     }
@@ -351,7 +347,7 @@ void GameManager::Render()
     else if (m_scene == SceneName::Level3)
     {
         view = Level3ViewMatrix();
-        cameraPosition = m_scene.firstPersonHelicopter ? m_scene.player.Position() : LevelCameraPosition();
+        cameraPosition = Level3CameraPosition();
         clearColor = { 0.38f, 0.55f, 0.78f, 1.0f };
     }
 
@@ -365,6 +361,27 @@ DirectX::XMMATRIX GameManager::ProjectionMatrix() const
     return m_camera.ProjectionMatrix(m_width, m_height);
 }
 
+DirectX::XMMATRIX GameManager::ActiveViewMatrix() const
+{
+    if (m_scene == SceneName::Level1)
+    {
+        return LevelViewMatrix();
+    }
+    if (m_scene == SceneName::Level2)
+    {
+        return Level2ViewMatrix();
+    }
+    if (m_scene == SceneName::Level3)
+    {
+        return Level3ViewMatrix();
+    }
+
+    return DirectX::XMMatrixLookAtLH(
+        DirectX::XMVectorSet(0.0f, 0.0f, -8.5f, 1.0f),
+        DirectX::XMVectorZero(),
+        DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+}
+
 DirectX::XMMATRIX GameManager::LevelViewMatrix() const
 {
     return m_camera.LevelViewMatrix(m_scene.player.Position(), m_scene.player.Yaw(), ForwardDirection());
@@ -375,15 +392,16 @@ DirectX::XMMATRIX GameManager::Level2ViewMatrix() const
     using namespace DirectX;
 
     const XMFLOAT3 tankPosition = m_scene.playerTank.Position();
-    const XMFLOAT3 forward = m_scene.playerTank.ForwardDirection();
+    const XMFLOAT3 forward = ForwardDirection();
+    const XMFLOAT3 flatForward{ std::sinf(m_scene.player.Yaw()), 0.0f, std::cosf(m_scene.player.Yaw()) };
     const XMVECTOR eye = XMVectorSet(
-        tankPosition.x - forward.x * 18.0f,
-        tankPosition.y + 10.0f,
-        tankPosition.z - forward.z * 18.0f,
+        tankPosition.x - flatForward.x * 28.0f,
+        tankPosition.y + 10.5f,
+        tankPosition.z - flatForward.z * 28.0f,
         1.0f);
     const XMVECTOR target = XMVectorSet(
         tankPosition.x + forward.x * 8.0f,
-        tankPosition.y + 2.0f,
+        tankPosition.y + 2.2f + forward.y * 8.0f,
         tankPosition.z + forward.z * 8.0f,
         1.0f);
     return XMMatrixLookAtLH(eye, target, XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
@@ -398,9 +416,9 @@ DirectX::XMMATRIX GameManager::Level3ViewMatrix() const
         return LevelViewMatrix();
     }
 
-    const XMFLOAT3 position = m_scene.player.Position();
+    const XMFLOAT3 position = Level3CameraPosition();
     const XMFLOAT3 forward = ForwardDirection();
-    const XMVECTOR eye = XMVectorSet(position.x, position.y + 0.35f, position.z, 1.0f);
+    const XMVECTOR eye = XMVectorSet(position.x, position.y, position.z, 1.0f);
     const XMVECTOR target = XMVectorSet(position.x + forward.x * 10.0f, position.y + forward.y * 10.0f, position.z + forward.z * 10.0f, 1.0f);
     return XMMatrixLookAtLH(eye, target, XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
 }

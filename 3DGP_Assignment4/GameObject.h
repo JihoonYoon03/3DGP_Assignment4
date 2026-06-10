@@ -9,6 +9,7 @@ public:
     std::size_t meshPartIndex = 0;
     DirectX::XMFLOAT4X4 world{};
     DirectX::XMFLOAT4 color{};
+    bool unlit = false;
 };
 
 class GameObject
@@ -70,19 +71,29 @@ public:
     float ShotCooldown() const;
     bool CanFire() const;
     void StartShotCooldown(float seconds);
+    bool Damage(int amount);
+    bool Destroyed() const;
+    int Health() const;
 
 private:
     float m_rotorAngle = 0.0f;
     float m_shotCooldown = 0.0f;
+    int m_health = 3;
 };
 
 class Bullet : public GameObject
 {
 public:
-    Bullet();
-    Bullet(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& velocity, float lifeSeconds, bool homing, int targetIndex, float homingDelaySeconds, float trailSpawnAccumulator);
+    enum class Owner
+    {
+        Player,
+        Enemy
+    };
 
-    void Launch(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& velocity, float lifeSeconds, bool homing, int targetIndex, float homingDelaySeconds, float trailSpawnAccumulator);
+    Bullet();
+    Bullet(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& velocity, float lifeSeconds, bool homing, int targetIndex, float homingDelaySeconds, float trailSpawnAccumulator, Owner owner = Owner::Player);
+
+    void Launch(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& velocity, float lifeSeconds, bool homing, int targetIndex, float homingDelaySeconds, float trailSpawnAccumulator, Owner owner = Owner::Player);
     void Update(float deltaSeconds) override;
 
     const DirectX::XMFLOAT3& Velocity() const;
@@ -95,6 +106,8 @@ public:
     float LifeSeconds() const;
 
     bool IsHoming() const;
+    Owner ProjectileOwner() const;
+    bool IsEnemyOwned() const;
     int TargetIndex() const;
     bool HasHomingTarget() const;
     bool CanHome() const;
@@ -113,6 +126,7 @@ private:
     float m_trailSpawnAccumulator = 0.0f;
     bool m_homing = false;
     int m_targetIndex = -1;
+    Owner m_owner = Owner::Player;
 };
 
 class Enemy : public GameObject
@@ -136,9 +150,16 @@ public:
     void Update(float deltaSeconds) override;
     void MoveForward(float distance);
     void RotateYaw(float amount);
+    void RotateTurretYaw(float amount);
+    void SetTurretYaw(float yaw);
+    void SetBarrelPitch(float pitch);
 
     DirectX::XMFLOAT3 ForwardDirection() const;
+    DirectX::XMFLOAT3 TurretForwardDirection() const;
+    DirectX::XMFLOAT3 AimDirection() const;
     DirectX::XMFLOAT3 FirePoint(float forwardOffset, float heightOffset) const;
+    float TurretYaw() const;
+    float BarrelPitch() const;
 
     bool CanFire() const;
     void StartReload(float seconds);
@@ -156,6 +177,8 @@ public:
 private:
     int m_health = 1;
     float m_reloadSeconds = 0.0f;
+    float m_turretYaw = 0.0f;
+    float m_barrelPitch = 0.0f;
     bool m_shieldEnabled = false;
     bool m_autoAttackEnabled = false;
 };

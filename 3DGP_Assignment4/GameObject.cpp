@@ -146,6 +146,7 @@ void Player::Reset(const DirectX::XMFLOAT3& position)
     SetRotation(0.0f, 0.0f, 0.0f);
     m_rotorAngle = 0.0f;
     m_shotCooldown = 0.0f;
+    m_health = 3;
     Activate();
 }
 
@@ -182,6 +183,11 @@ void Player::ClampAltitude(float minimumAltitude, float maximumAltitude)
 
 void Player::Update(float deltaSeconds)
 {
+    if (!IsActive())
+    {
+        return;
+    }
+
     m_rotorAngle += 22.0f * deltaSeconds;
     m_shotCooldown = std::max(0.0f, m_shotCooldown - deltaSeconds);
 }
@@ -214,7 +220,7 @@ float Player::ShotCooldown() const
 
 bool Player::CanFire() const
 {
-    return m_shotCooldown <= 0.0f;
+    return IsActive() && m_shotCooldown <= 0.0f;
 }
 
 void Player::StartShotCooldown(float seconds)
@@ -222,17 +228,43 @@ void Player::StartShotCooldown(float seconds)
     m_shotCooldown = std::max(0.0f, seconds);
 }
 
+bool Player::Damage(int amount)
+{
+    if (!IsActive())
+    {
+        return false;
+    }
+
+    m_health -= std::max(0, amount);
+    if (m_health <= 0)
+    {
+        Deactivate();
+        return true;
+    }
+    return false;
+}
+
+bool Player::Destroyed() const
+{
+    return !IsActive();
+}
+
+int Player::Health() const
+{
+    return m_health;
+}
+
 Bullet::Bullet()
 {
     Deactivate();
 }
 
-Bullet::Bullet(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& velocity, float lifeSeconds, bool homing, int targetIndex, float homingDelaySeconds, float trailSpawnAccumulator)
+Bullet::Bullet(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& velocity, float lifeSeconds, bool homing, int targetIndex, float homingDelaySeconds, float trailSpawnAccumulator, Owner owner)
 {
-    Launch(position, velocity, lifeSeconds, homing, targetIndex, homingDelaySeconds, trailSpawnAccumulator);
+    Launch(position, velocity, lifeSeconds, homing, targetIndex, homingDelaySeconds, trailSpawnAccumulator, owner);
 }
 
-void Bullet::Launch(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& velocity, float lifeSeconds, bool homing, int targetIndex, float homingDelaySeconds, float trailSpawnAccumulator)
+void Bullet::Launch(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& velocity, float lifeSeconds, bool homing, int targetIndex, float homingDelaySeconds, float trailSpawnAccumulator, Owner owner)
 {
     SetPosition(position);
     m_velocity = velocity;
@@ -241,6 +273,7 @@ void Bullet::Launch(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& 
     m_targetIndex = targetIndex;
     m_homingDelaySeconds = homingDelaySeconds;
     m_trailSpawnAccumulator = trailSpawnAccumulator;
+    m_owner = owner;
     Activate();
 }
 
@@ -298,6 +331,16 @@ float Bullet::LifeSeconds() const
 bool Bullet::IsHoming() const
 {
     return m_homing;
+}
+
+Bullet::Owner Bullet::ProjectileOwner() const
+{
+    return m_owner;
+}
+
+bool Bullet::IsEnemyOwned() const
+{
+    return m_owner == Owner::Enemy;
 }
 
 int Bullet::TargetIndex() const
@@ -405,6 +448,8 @@ void Tank::Reset(const DirectX::XMFLOAT3& position, float yaw, int health)
     SetRotation(0.0f, yaw, 0.0f);
     m_health = std::max(1, health);
     m_reloadSeconds = 0.0f;
+    m_turretYaw = yaw;
+    m_barrelPitch = 0.0f;
     m_shieldEnabled = false;
     m_autoAttackEnabled = false;
     Activate();
@@ -425,20 +470,56 @@ void Tank::RotateYaw(float amount)
     SetYaw(Yaw() + amount);
 }
 
+void Tank::RotateTurretYaw(float amount)
+{
+    m_turretYaw += amount;
+}
+
+void Tank::SetTurretYaw(float yaw)
+{
+    m_turretYaw = yaw;
+}
+
+void Tank::SetBarrelPitch(float pitch)
+{
+    m_barrelPitch = std::clamp(pitch, -0.55f, 0.45f);
+}
+
 DirectX::XMFLOAT3 Tank::ForwardDirection() const
 {
     return { std::sin(Yaw()), 0.0f, std::cos(Yaw()) };
 }
 
+DirectX::XMFLOAT3 Tank::TurretForwardDirection() const
+{
+    return { std::sin(m_turretYaw), 0.0f, std::cos(m_turretYaw) };
+}
+
+DirectX::XMFLOAT3 Tank::AimDirection() const
+{
+    const float cosPitch = std::cos(m_barrelPitch);
+    return Collision::Normalize({ std::sin(m_turretYaw) * cosPitch, std::sin(m_barrelPitch), std::cos(m_turretYaw) * cosPitch });
+}
+
 DirectX::XMFLOAT3 Tank::FirePoint(float forwardOffset, float heightOffset) const
 {
-    const DirectX::XMFLOAT3 forward = ForwardDirection();
+    const DirectX::XMFLOAT3 forward = AimDirection();
     return
     {
         Position().x + forward.x * forwardOffset,
         Position().y + heightOffset,
         Position().z + forward.z * forwardOffset
     };
+}
+
+float Tank::TurretYaw() const
+{
+    return m_turretYaw;
+}
+
+float Tank::BarrelPitch() const
+{
+    return m_barrelPitch;
 }
 
 bool Tank::CanFire() const
