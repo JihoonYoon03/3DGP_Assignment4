@@ -64,6 +64,8 @@ private:
     void AddCrosshair();
     void AddLockOnIndicator();
     void AddLockBrackets(const DirectX::XMFLOAT3& center, const DirectX::XMFLOAT4& color);
+    void AddHealthBar(const LifeBar& lifeBar);
+    void AddNdcBox(const DirectX::XMFLOAT2& center, const DirectX::XMFLOAT2& size, float depth, const DirectX::XMFLOAT4& color);
     void AddBox(const DirectX::XMFLOAT3& center, const DirectX::XMFLOAT3& size, const DirectX::XMFLOAT4& color, float yaw = 0.0f, float pitch = 0.0f, float roll = 0.0f);
     void AddBoxWithWorld(const DirectX::XMMATRIX& world, const DirectX::XMFLOAT4& color, bool unlit = false);
     void AddText3D(const std::wstring& text, const DirectX::XMFLOAT3& origin, float unitSize, float depth, const DirectX::XMFLOAT4& color, float yaw = 0.0f, bool centered = true, float glyphSpacing = 0.25f);

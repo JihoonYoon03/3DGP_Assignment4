@@ -353,6 +353,10 @@ void Renderer::CreatePipelineState()
     psoDesc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
     psoDesc.SampleDesc.Count = 1;
     ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
+
+    depthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    psoDesc.DepthStencilState = depthStencilDesc;
+    ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_transparentPipelineState)));
 }
 
 void Renderer::RenderFrame(
@@ -406,35 +410,80 @@ void Renderer::PopulateCommandList(
     m_commandList->ClearRenderTargetView(rtvHandle, clearColorValues, 0, nullptr);
     m_commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
+    struct TransparentDraw
+    {
+        std::size_t itemIndex = 0;
+        float distanceSquared = 0.0f;
+    };
+
     const UINT constantBufferStride = AlignConstantBufferSize(sizeof(ObjectConstants));
+    std::vector<TransparentDraw> transparentDraws;
+    transparentDraws.reserve(drawItems.size());
+
     for (std::size_t itemIndex = 0; itemIndex < drawItems.size(); ++itemIndex)
     {
         const DrawItem& item = drawItems[itemIndex];
-        const MeshResource* mesh = &meshes[static_cast<std::size_t>(item.mesh)];
-        if (item.mesh == MeshType::Model)
+        if (item.color.w < 0.999f)
         {
-            if (item.meshPartIndex >= modelParts.size())
-            {
-                continue;
-            }
-            mesh = &modelParts[item.meshPartIndex].mesh;
-        }
-
-        if (mesh->indexCount == 0 || !mesh->vertexBuffer || !mesh->indexBuffer)
-        {
+            const float dx = item.world._41 - cameraPosition.x;
+            const float dy = item.world._42 - cameraPosition.y;
+            const float dz = item.world._43 - cameraPosition.z;
+            transparentDraws.push_back({ itemIndex, dx * dx + dy * dy + dz * dz });
             continue;
         }
 
-        m_commandList->IASetPrimitiveTopology(mesh->topology);
-        m_commandList->IASetVertexBuffers(0, 1, &mesh->vertexBufferView);
-        m_commandList->IASetIndexBuffer(&mesh->indexBufferView);
-        m_commandList->SetGraphicsRootConstantBufferView(0, m_constantBuffer->GetGPUVirtualAddress() + itemIndex * constantBufferStride);
-        m_commandList->DrawIndexedInstanced(mesh->indexCount, 1, 0, 0, 0);
+        DrawSingleItem(item, itemIndex, constantBufferStride, meshes, modelParts);
+    }
+
+    if (!transparentDraws.empty())
+    {
+        std::stable_sort(
+            transparentDraws.begin(),
+            transparentDraws.end(),
+            [](const TransparentDraw& left, const TransparentDraw& right)
+            {
+                return left.distanceSquared > right.distanceSquared;
+            });
+
+        m_commandList->SetPipelineState(m_transparentPipelineState.Get());
+        for (const TransparentDraw& transparentDraw : transparentDraws)
+        {
+            DrawSingleItem(drawItems[transparentDraw.itemIndex], transparentDraw.itemIndex, constantBufferStride, meshes, modelParts);
+        }
     }
 
     const D3D12_RESOURCE_BARRIER toPresent = TransitionBarrier(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     m_commandList->ResourceBarrier(1, &toPresent);
     ThrowIfFailed(m_commandList->Close());
+}
+
+void Renderer::DrawSingleItem(
+    const DrawItem& item,
+    std::size_t itemIndex,
+    UINT constantBufferStride,
+    const std::array<MeshResource, static_cast<std::size_t>(MeshType::Count)>& meshes,
+    const std::vector<ModelMeshPart>& modelParts)
+{
+    const MeshResource* mesh = &meshes[static_cast<std::size_t>(item.mesh)];
+    if (item.mesh == MeshType::Model)
+    {
+        if (item.meshPartIndex >= modelParts.size())
+        {
+            return;
+        }
+        mesh = &modelParts[item.meshPartIndex].mesh;
+    }
+
+    if (mesh->indexCount == 0 || !mesh->vertexBuffer || !mesh->indexBuffer)
+    {
+        return;
+    }
+
+    m_commandList->IASetPrimitiveTopology(mesh->topology);
+    m_commandList->IASetVertexBuffers(0, 1, &mesh->vertexBufferView);
+    m_commandList->IASetIndexBuffer(&mesh->indexBufferView);
+    m_commandList->SetGraphicsRootConstantBufferView(0, m_constantBuffer->GetGPUVirtualAddress() + itemIndex * constantBufferStride);
+    m_commandList->DrawIndexedInstanced(mesh->indexCount, 1, 0, 0, 0);
 }
 
 void Renderer::UploadObjectConstants(

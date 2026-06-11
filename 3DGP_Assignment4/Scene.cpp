@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "GameManager.h"
 
 #include "Collision.h"
@@ -106,6 +106,9 @@ namespace
     constexpr float Level2WinReturnSeconds = 2.0f;
     constexpr float Level3RestartSeconds = 1.0f;
     constexpr float HelicopterHitRadius = 3.2f;
+    constexpr float ApacheCockpitCameraLocalX = 0.0f;
+    constexpr float ApacheCockpitCameraLocalY = 1.7f;
+    constexpr float ApacheCockpitCameraLocalZ = 34.0f;
 
     constexpr float MissileTrailSpawnIntervalSeconds = 0.035f;
     constexpr float MissileTrailDurationSeconds = 0.62f;
@@ -113,6 +116,11 @@ namespace
 
     constexpr int ExplosionParticleCount = 34;
     constexpr float ExplosionDurationSeconds = 0.85f;
+
+    bool IsApacheGlassPart(const ModelMeshPart& part)
+    {
+        return part.name == "glass";
+    }
 
     // 5x7 도트 글자 하나를 표현하는 타입
     using GlyphPattern = std::array<std::string_view, 7>;
@@ -1639,6 +1647,8 @@ void GameManager::BuildLevelScene()
     AddExplosions();
     AddCrosshair();
     AddLockOnIndicator();
+    m_scene.lifeBar.SetValue(m_scene.player.Health(), m_scene.player.MaxHealth());
+    AddHealthBar(m_scene.lifeBar);
 }
 
 void GameManager::BuildLevel2Scene()
@@ -1663,6 +1673,8 @@ void GameManager::BuildLevel2Scene()
     AddExplosions();
     AddCrosshair();
     AddLockOnIndicator();
+    m_scene.lifeBar.SetValue(m_scene.playerTank.Health(), m_scene.playerTank.MaxHealth());
+    AddHealthBar(m_scene.lifeBar);
 
     if (m_scene.level2Win)
     {
@@ -1708,6 +1720,8 @@ void GameManager::BuildLevel3Scene()
     AddExplosions();
     AddCrosshair();
     AddLockOnIndicator();
+    m_scene.lifeBar.SetValue(m_scene.player.Health(), m_scene.player.MaxHealth());
+    AddHealthBar(m_scene.lifeBar);
 }
 
 void GameManager::AddModel(ModelType type, const XMMATRIX& world, const XMFLOAT4& color)
@@ -1900,7 +1914,7 @@ void GameManager::AddLevelExitMarker()
         0.58f,
         0.20f,
         textColor,
-        m_scene.player.Yaw() + Pi,
+        m_scene.player.Yaw(),
         true,
         0.22f);
 }
@@ -1945,7 +1959,9 @@ void GameManager::AddHelicopter()
             item.mesh = MeshType::Model;
             item.meshPartIndex = partIndex;
             XMStoreFloat4x4(&item.world, partAnimation * modelWorld);
-            item.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+            item.color = IsApacheGlassPart(part) ?
+                XMFLOAT4{ 0.82f, 0.96f, 1.0f, 0.08f } :
+                XMFLOAT4{ 1.0f, 1.0f, 1.0f, 1.0f };
             m_scene.drawItems.push_back(item);
         }
         return;
@@ -2132,6 +2148,42 @@ void GameManager::AddLockBrackets(const XMFLOAT3& center, const XMFLOAT4& color)
     AddBox({ center.x - half + segment * 0.5f, center.y - half, center.z }, { segment, thickness, thickness }, color);
     AddBox({ center.x + half, center.y - half, center.z }, { thickness, segment, thickness }, color);
     AddBox({ center.x + half - segment * 0.5f, center.y - half, center.z }, { segment, thickness, thickness }, color);
+}
+
+void GameManager::AddHealthBar(const LifeBar& lifeBar)
+{
+    const int segmentCount = lifeBar.SegmentCount();
+    if (segmentCount <= 0)
+    {
+        return;
+    }
+
+    const int filledSegments = lifeBar.FilledSegments();
+    const XMFLOAT2 segmentSize = lifeBar.SegmentSize();
+    const XMFLOAT2 center = lifeBar.Center();
+    const float gap = lifeBar.SegmentGap();
+    const float totalWidth = segmentSize.x * static_cast<float>(segmentCount) + gap * static_cast<float>(segmentCount - 1);
+    const float startX = center.x - totalWidth * 0.5f + segmentSize.x * 0.5f;
+
+    for (int segmentIndex = 0; segmentIndex < filledSegments; ++segmentIndex)
+    {
+        const XMFLOAT2 segmentCenter
+        {
+            startX + static_cast<float>(segmentIndex) * (segmentSize.x + gap),
+            center.y
+        };
+        AddNdcBox(segmentCenter, segmentSize, lifeBar.Depth(), lifeBar.FillColor());
+    }
+}
+
+void GameManager::AddNdcBox(const XMFLOAT2& center, const XMFLOAT2& size, float depth, const XMFLOAT4& color)
+{
+    const XMMATRIX ndcToWorld = XMMatrixInverse(nullptr, ActiveViewMatrix() * ProjectionMatrix());
+    const XMMATRIX world =
+        XMMatrixScaling(size.x, size.y, depth) *
+        XMMatrixTranslation(center.x, center.y, 0.045f) *
+        ndcToWorld;
+    AddBoxWithWorld(world, color, true);
 }
 
 void GameManager::AddBox(const XMFLOAT3& center, const XMFLOAT3& size, const XMFLOAT4& color, float yaw, float pitch, float roll)
@@ -2991,15 +3043,13 @@ XMFLOAT3 GameManager::Level3CameraPosition() const
         return LevelCameraPosition();
     }
 
-    const XMFLOAT3 position = m_scene.player.Position();
-    const XMFLOAT3 forward = ForwardDirection();
-    const XMFLOAT3 right = m_scene.player.FlatRight();
-    return
-    {
-        position.x - right.x * 3.15f - forward.x * 1.15f,
-        position.y - 0.55f,
-        position.z - right.z * 3.15f - forward.z * 1.15f
-    };
+    XMFLOAT3 cockpitPosition{};
+    XMStoreFloat3(
+        &cockpitPosition,
+        XMVector3TransformCoord(
+            XMVectorSet(ApacheCockpitCameraLocalX, ApacheCockpitCameraLocalY, ApacheCockpitCameraLocalZ, 1.0f),
+            PlayerModelWorldMatrix()));
+    return cockpitPosition;
 }
 
 XMFLOAT3 GameManager::TankCameraPosition() const

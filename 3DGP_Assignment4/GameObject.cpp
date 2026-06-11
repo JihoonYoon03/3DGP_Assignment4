@@ -146,6 +146,7 @@ void Player::Reset(const DirectX::XMFLOAT3& position)
     SetRotation(0.0f, 0.0f, 0.0f);
     m_rotorAngle = 0.0f;
     m_shotCooldown = 0.0f;
+    m_maxHealth = 3;
     m_health = 3;
     Activate();
 }
@@ -238,6 +239,7 @@ bool Player::Damage(int amount)
     m_health -= std::max(0, amount);
     if (m_health <= 0)
     {
+        m_health = 0;
         Deactivate();
         return true;
     }
@@ -252,6 +254,11 @@ bool Player::Destroyed() const
 int Player::Health() const
 {
     return m_health;
+}
+
+int Player::MaxHealth() const
+{
+    return m_maxHealth;
 }
 
 Bullet::Bullet()
@@ -446,7 +453,8 @@ void Tank::Reset(const DirectX::XMFLOAT3& position, float yaw, int health)
 {
     SetPosition(position);
     SetRotation(0.0f, yaw, 0.0f);
-    m_health = std::max(1, health);
+    m_maxHealth = std::max(1, health);
+    m_health = m_maxHealth;
     m_reloadSeconds = 0.0f;
     m_turretYaw = yaw;
     m_barrelPitch = 0.0f;
@@ -542,6 +550,7 @@ bool Tank::Damage(int amount)
     m_health -= std::max(0, amount);
     if (m_health <= 0)
     {
+        m_health = 0;
         Deactivate();
         return true;
     }
@@ -551,6 +560,16 @@ bool Tank::Damage(int amount)
 bool Tank::Destroyed() const
 {
     return !IsActive();
+}
+
+int Tank::Health() const
+{
+    return m_health;
+}
+
+int Tank::MaxHealth() const
+{
+    return m_maxHealth;
 }
 
 void Tank::SetShieldEnabled(bool enabled)
@@ -581,6 +600,61 @@ void Tank::ToggleAutoAttack()
 bool Tank::AutoAttackEnabled() const
 {
     return m_autoAttackEnabled;
+}
+
+LifeBar::LifeBar() = default;
+
+void LifeBar::SetValue(int current, int maximum)
+{
+    m_maximum = std::max(1, maximum);
+    m_current = std::clamp(current, 0, m_maximum);
+    m_segmentCount = m_maximum;
+    SetActive(m_current > 0);
+}
+
+int LifeBar::Current() const
+{
+    return m_current;
+}
+
+int LifeBar::Maximum() const
+{
+    return m_maximum;
+}
+
+int LifeBar::SegmentCount() const
+{
+    return m_segmentCount;
+}
+
+int LifeBar::FilledSegments() const
+{
+    return std::clamp(m_current, 0, m_segmentCount);
+}
+
+const DirectX::XMFLOAT2& LifeBar::Center() const
+{
+    return m_center;
+}
+
+const DirectX::XMFLOAT2& LifeBar::SegmentSize() const
+{
+    return m_segmentSize;
+}
+
+float LifeBar::SegmentGap() const
+{
+    return m_segmentGap;
+}
+
+float LifeBar::Depth() const
+{
+    return m_depth;
+}
+
+const DirectX::XMFLOAT4& LifeBar::FillColor() const
+{
+    return m_fillColor;
 }
 
 Obstacle::Obstacle() = default;

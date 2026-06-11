@@ -74,11 +74,13 @@ public:
     bool Damage(int amount);
     bool Destroyed() const;
     int Health() const;
+    int MaxHealth() const;
 
 private:
     float m_rotorAngle = 0.0f;
     float m_shotCooldown = 0.0f;
     int m_health = 3;
+    int m_maxHealth = 3;
 };
 
 class Bullet : public GameObject
@@ -165,6 +167,8 @@ public:
     void StartReload(float seconds);
     bool Damage(int amount);
     bool Destroyed() const;
+    int Health() const;
+    int MaxHealth() const;
 
     void SetShieldEnabled(bool enabled);
     void ToggleShield();
@@ -176,11 +180,40 @@ public:
 
 private:
     int m_health = 1;
+    int m_maxHealth = 1;
     float m_reloadSeconds = 0.0f;
     float m_turretYaw = 0.0f;
     float m_barrelPitch = 0.0f;
     bool m_shieldEnabled = false;
     bool m_autoAttackEnabled = false;
+};
+
+class LifeBar : public GameObject
+{
+public:
+    LifeBar();
+
+    void SetValue(int current, int maximum);
+    int Current() const;
+    int Maximum() const;
+    int SegmentCount() const;
+    int FilledSegments() const;
+
+    const DirectX::XMFLOAT2& Center() const;
+    const DirectX::XMFLOAT2& SegmentSize() const;
+    float SegmentGap() const;
+    float Depth() const;
+    const DirectX::XMFLOAT4& FillColor() const;
+
+private:
+    int m_current = 0;
+    int m_maximum = 1;
+    int m_segmentCount = 1;
+    DirectX::XMFLOAT2 m_center{ 0.0f, -0.88f };
+    DirectX::XMFLOAT2 m_segmentSize{ 0.055f, 0.030f };
+    float m_segmentGap = 0.010f;
+    float m_depth = 0.010f;
+    DirectX::XMFLOAT4 m_fillColor{ 0.95f, 0.25f, 0.30f, 1.0f };
 };
 
 class Obstacle : public GameObject

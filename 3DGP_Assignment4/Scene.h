@@ -35,6 +35,7 @@ public:
 
     Terrain terrain{};
     Player player{};
+    LifeBar lifeBar{};
     std::vector<Bullet> bullets;
     std::vector<Enemy> enemies;
     Tank playerTank{};

@@ -52,6 +52,12 @@ private:
         const DirectX::XMMATRIX& viewProjection,
         const DirectX::XMFLOAT3& cameraPosition,
         const DirectX::XMFLOAT4& clearColor);
+    void DrawSingleItem(
+        const DrawItem& item,
+        std::size_t itemIndex,
+        UINT constantBufferStride,
+        const std::array<MeshResource, static_cast<std::size_t>(MeshType::Count)>& meshes,
+        const std::vector<ModelMeshPart>& modelParts);
 
     void UploadObjectConstants(
         const std::vector<DrawItem>& drawItems,
@@ -84,6 +90,7 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_transparentPipelineState;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_renderTargets[FrameCount];
     Microsoft::WRL::ComPtr<ID3D12Resource> m_depthStencil;
