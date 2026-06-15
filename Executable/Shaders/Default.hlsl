@@ -1,4 +1,5 @@
-﻿cbuffer ObjectConstants : register(b0)
+// ??? ?? ??, ??, ??? ??, ?? ??
+cbuffer ObjectConstants : register(b0)
 {
     float4x4 gWorld;
     float4x4 gWorldInverseTranspose;
@@ -27,6 +28,7 @@ struct VertexOut
     float3 normal : NORMAL;
 };
 
+// ?? ??, ?? ?? ??? ?? ???
 VertexOut VSMain(VertexIn input)
 {
     VertexOut output;
@@ -38,6 +40,7 @@ VertexOut VSMain(VertexIn input)
     return output;
 }
 
+// ????, ???, ???? ??. ??? ?? ??
 float4 PSMain(VertexOut input) : SV_TARGET
 {
     if (gLightingOptions.y > 0.5f)
